@@ -1,0 +1,1 @@
+"""Product API integration model."""

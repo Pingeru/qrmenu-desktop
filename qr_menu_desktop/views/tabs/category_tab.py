@@ -1,0 +1,1 @@
+"""Category management tab view."""
