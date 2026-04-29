@@ -1,0 +1,27 @@
+# Byte-compiled / optimized / DLL dosyaları
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Sanal Ortamlar (Virtual Environments)
+venv/
+.venv/
+env/
+.env/
+
+# IDE / Editör Dosyaları (VS Code, PyCharm vb.)
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# İşletim Sistemi Dosyaları
+.DS_Store
+Thumbs.db
+
+# Log dosyaları ve veritabanı (Eğer masaüstünde lokal bir db veya log tutacaksan)
+*.log
+*.sqlite3
+
+# PyQt / UI tasarım artıkları (Eğer Qt Designer kullanırsan)
+*.ui.autosave
