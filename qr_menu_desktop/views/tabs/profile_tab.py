@@ -1,1 +1,0 @@
-"""Business profile tab view."""

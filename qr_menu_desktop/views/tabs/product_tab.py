@@ -1,1 +1,0 @@
-"""Product management tab view."""
