@@ -1,29 +1,45 @@
+import sys
+
+from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QApplication,
+    QFrame,
     QGridLayout,
+    QHBoxLayout,
+    QLabel,
     QLineEdit,
     QMainWindow,
     QMessageBox,
-    QPushButton,
     QStackedWidget,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
-    QLabel,
-    QTabWidget,
 )
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont
-from tabs.category_tab import Catagory_Tab
-from tabs.order_tab import Order_Tab
-from tabs.product_tab import Product_Tab
-from tabs.profile_tab import Profile_Tab
+
+try:
+    from view.components import app_stylesheet, make_badge, make_button, make_card, make_label
+    from view.tabs.analytics_tab import Analytics_Tab
+    from view.tabs.category_tab import Catagory_Tab
+    from view.tabs.order_tab import Order_Tab
+    from view.tabs.product_tab import Product_Tab
+    from view.tabs.profile_tab import Profile_Tab
+except ModuleNotFoundError:
+    from components import app_stylesheet, make_badge, make_button, make_card, make_label
+    from tabs.analytics_tab import Analytics_Tab
+    from tabs.category_tab import Catagory_Tab
+    from tabs.order_tab import Order_Tab
+    from tabs.product_tab import Product_Tab
+    from tabs.profile_tab import Profile_Tab
 
 
 class Main_Window(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Project X")
+        self.setWindowTitle("QR Menu Builder")
         self.setGeometry(50, 50, 1300, 900)
+        self.setMinimumSize(1100, 760)
+        self.setStyleSheet(app_stylesheet())
 
         self._username = "admin"
         self._password = "1"
@@ -38,70 +54,103 @@ class Main_Window(QMainWindow):
 
     def _create_login_page(self):
         page = QWidget()
+        page.setObjectName("LoginPage")
         outer_layout = QVBoxLayout(page)
         outer_layout.setAlignment(Qt.AlignCenter)
+        outer_layout.setContentsMargins(24, 24, 24, 24)
 
-        card = QWidget()
-        card.setMaximumWidth(360)
+        card = make_card()
+        card.setMaximumWidth(430)
+        card.setMinimumWidth(390)
         form_layout = QGridLayout(card)
+        form_layout.setContentsMargins(28, 28, 28, 28)
+        form_layout.setHorizontalSpacing(14)
+        form_layout.setVerticalSpacing(14)
 
-        title = QLabel("Giriş Yap")
+        title = QLabel("QR Menu Builder")
         title.setAlignment(Qt.AlignCenter)
+        title.setProperty("role", "title")
         title_font = QFont()
-        title_font.setPointSize(16)
+        title_font.setPointSize(22)
+        title_font.setBold(True)
         title.setFont(title_font)
 
-        username_label = QLabel("Kullanıcı Adı")
+        subtitle = make_label("Business desktop client", "subtitle")
+        subtitle.setAlignment(Qt.AlignCenter)
+
         label_font = QFont()
-        label_font.setPointSize(12)
+        label_font.setPointSize(11)
+
+        username_label = QLabel("Username")
         username_label.setFont(label_font)
         self.username_input = QLineEdit()
-        self.username_input.setPlaceholderText("Kullanıcı adını gir")
+        self.username_input.setPlaceholderText("admin")
         self.username_input.setFont(label_font)
 
-        password_label = QLabel("Şifre")
+        password_label = QLabel("Password")
         password_label.setFont(label_font)
         self.password_input = QLineEdit()
-        self.password_input.setPlaceholderText("Şifreyi gir")
+        self.password_input.setPlaceholderText("1")
         self.password_input.setEchoMode(QLineEdit.Password)
         self.password_input.setFont(label_font)
 
-        login_button = QPushButton("Giriş")
+        login_button = make_button("Login", "primary")
         login_button.setFont(label_font)
         login_button.clicked.connect(self._handle_login)
+        self.password_input.returnPressed.connect(self._handle_login)
 
         form_layout.addWidget(title, 0, 0, 1, 2)
-        form_layout.addWidget(username_label, 1, 0)
-        form_layout.addWidget(self.username_input, 1, 1)
-        form_layout.addWidget(password_label, 2, 0)
-        form_layout.addWidget(self.password_input, 2, 1)
-        form_layout.addWidget(login_button, 3, 0, 1, 2)
+        form_layout.addWidget(subtitle, 1, 0, 1, 2)
+        form_layout.addWidget(username_label, 2, 0)
+        form_layout.addWidget(self.username_input, 2, 1)
+        form_layout.addWidget(password_label, 3, 0)
+        form_layout.addWidget(self.password_input, 3, 1)
+        form_layout.addWidget(login_button, 4, 0, 1, 2)
 
         outer_layout.addWidget(card)
         return page
 
     def _create_home_page(self):
         page = QWidget()
+        page.setObjectName("HomePage")
         layout = QVBoxLayout(page)
-        layout.setAlignment(Qt.AlignCenter)
+        layout.setContentsMargins(22, 18, 22, 22)
+        layout.setSpacing(14)
 
-        welcome_label = QLabel("Giriş başarılı. Ana uygulamaya hoş geldin.")
-        welcome_font = QFont()
-        welcome_font.setPointSize(14)
-        welcome_label.setFont(welcome_font)
-        welcome_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(welcome_label)
+        header = QFrame()
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(12)
+
+        title = QLabel("QR Menu Builder")
+        title.setProperty("role", "title")
+        title_font = QFont()
+        title_font.setPointSize(20)
+        title_font.setBold(True)
+        title.setFont(title_font)
+
+        header_layout.addWidget(title)
+        header_layout.addWidget(make_badge("Demo API client", "accent"))
+        header_layout.addStretch(1)
+        header_layout.addWidget(make_label("Logged in as admin", "muted"))
+
+        logout_button = make_button("Logout", "ghost")
+        logout_button.clicked.connect(self._handle_logout)
+        header_layout.addWidget(logout_button)
+        layout.addWidget(header)
 
         tabs = QTabWidget()
         tab_font = QFont()
-        tab_font.setPointSize(12)
+        tab_font.setPointSize(11)
+        tab_font.setBold(True)
         tabs.setFont(tab_font)
-        tabs.addTab(Catagory_Tab(), "Kategoriler")
-        tabs.addTab(Product_Tab(), "Ürünler")
-        tabs.addTab(Order_Tab(), "Siparişler")
-        tabs.addTab(Profile_Tab(), "Profil")
+        tabs.addTab(Catagory_Tab(), "Categories")
+        tabs.addTab(Product_Tab(), "Products")
+        tabs.addTab(Order_Tab(), "Live Orders")
+        tabs.addTab(Profile_Tab(), "Profile && QR")
+        tabs.addTab(Analytics_Tab(), "Analytics")
 
-        layout.addWidget(tabs)
+        layout.addWidget(tabs, 1)
         return page
 
     def _handle_login(self):
@@ -112,14 +161,15 @@ class Main_Window(QMainWindow):
             self.stack.setCurrentWidget(self.home_page)
             return
 
-        QMessageBox.warning(self, "Hatalı giriş", "Kullanıcı adı veya şifre yanlış.")
+        QMessageBox.warning(self, "Login failed", "Username or password is incorrect.")
+
+    def _handle_logout(self):
+        self.password_input.clear()
+        self.stack.setCurrentWidget(self.login_page)
 
 
 if __name__ == "__main__":
-    import sys
-
     app = QApplication(sys.argv)
     window = Main_Window()
     window.show()
     sys.exit(app.exec_())
-
