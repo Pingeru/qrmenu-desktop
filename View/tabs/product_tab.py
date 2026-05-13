@@ -44,44 +44,7 @@ except ModuleNotFoundError:
 class Product_Tab(QWidget):
     def __init__(self):
         super().__init__()
-        self.products = [
-            {
-                "id": 1,
-                "name": "Classic Burger",
-                "category": "Main Courses",
-                "price": 210.00,
-                "status": "Visible",
-                "image": "burger.jpg",
-                "description": "House burger with cheddar, pickles, and signature sauce.",
-            },
-            {
-                "id": 2,
-                "name": "Iced Latte",
-                "category": "Drinks",
-                "price": 88.00,
-                "status": "Visible",
-                "image": "iced-latte.jpg",
-                "description": "Cold espresso, milk, and ice.",
-            },
-            {
-                "id": 3,
-                "name": "Chocolate Souffle",
-                "category": "Desserts",
-                "price": 130.00,
-                "status": "Hidden",
-                "image": "souffle.jpg",
-                "description": "Warm chocolate souffle served with vanilla ice cream.",
-            },
-            {
-                "id": 4,
-                "name": "Caesar Salad",
-                "category": "Starters",
-                "price": 155.00,
-                "status": "Visible",
-                "image": "caesar.jpg",
-                "description": "Romaine, parmesan, croutons, and grilled chicken.",
-            },
-        ]
+        self.products = []
         self.selected_product_id = None
 
         root = QVBoxLayout(self)
@@ -89,20 +52,22 @@ class Product_Tab(QWidget):
         root.setSpacing(18)
 
         add_button = make_button("Add Product", "primary")
+        add_button.setEnabled(False)
+        add_button.setToolTip("Product endpoints are not available in the backend yet.")
         add_button.clicked.connect(self._start_new_product)
         root.addWidget(
             SectionHeader(
                 "Product Management",
-                "Create, edit, hide, and prepare products for image upload via API.",
+                "Product endpoints are not available yet; this view will stay empty until the backend is ready.",
                 [add_button],
             )
         )
 
         summary = QHBoxLayout()
         summary.setSpacing(12)
-        self.total_card = StatCard("Total products", "4", "Across all categories")
-        self.visible_card = StatCard("Visible", "3", "Shown on QR menu", "green")
-        self.hidden_card = StatCard("Hidden", "1", "Kept out of customer menu", "amber")
+        self.total_card = StatCard("Total products", "0", "Backend endpoint pending")
+        self.visible_card = StatCard("Visible", "0", "Shown on QR menu", "green")
+        self.hidden_card = StatCard("Hidden", "0", "Kept out of customer menu", "amber")
         summary.addWidget(self.total_card)
         summary.addWidget(self.visible_card)
         summary.addWidget(self.hidden_card)
@@ -149,7 +114,7 @@ class Product_Tab(QWidget):
         toolbar = QHBoxLayout()
         toolbar.addWidget(make_label("Menu Items", "section-title"))
         toolbar.addStretch(1)
-        self.table_hint = make_badge("API-ready CRUD", "accent")
+        self.table_hint = make_badge("Awaiting API", "neutral")
         toolbar.addWidget(self.table_hint)
         layout.addLayout(toolbar)
 
@@ -214,14 +179,18 @@ class Product_Tab(QWidget):
 
         actions = QHBoxLayout()
         save_button = make_button("Save Changes", "primary")
+        save_button.setEnabled(False)
+        save_button.setToolTip("Product save is disabled until backend product endpoints exist.")
         save_button.clicked.connect(self._save_product)
         delete_button = make_button("Delete", "danger")
+        delete_button.setEnabled(False)
+        delete_button.setToolTip("Product delete is disabled until backend product endpoints exist.")
         delete_button.clicked.connect(self._delete_product)
         actions.addWidget(save_button)
         actions.addWidget(delete_button)
         layout.addLayout(actions)
 
-        self.form_status = make_label("Select a row or add a new product.", "muted")
+        self.form_status = make_label("No product data is loaded because the backend does not expose product endpoints yet.", "muted")
         self.form_status.setWordWrap(True)
         layout.addWidget(self.form_status)
         layout.addStretch(1)
@@ -321,7 +290,7 @@ class Product_Tab(QWidget):
         self.status_input.setCurrentText("Visible")
         self.description_input.clear()
         self.image_label.setText("No image selected")
-        self.form_status.setText("Ready to add a new product.")
+        self.form_status.setText("Product creation is disabled until the backend exposes product endpoints.")
 
     def _choose_image(self):
         path, _ = QFileDialog.getOpenFileName(
@@ -334,43 +303,11 @@ class Product_Tab(QWidget):
             self.image_label.setText(path)
 
     def _save_product(self):
-        name = self.name_input.text().strip()
-        if not name:
-            QMessageBox.warning(self, "Missing product name", "Product name is required.")
-            return
-
-        payload = {
-            "name": name,
-            "category": self.category_input.currentText(),
-            "price": float(self.price_input.value()),
-            "status": self.status_input.currentText(),
-            "image": self.image_label.text() if self.image_label.text() != "No image selected" else "pending-upload.jpg",
-            "description": self.description_input.toPlainText().strip(),
-        }
-
-        if self.selected_product_id:
-            product = self._product_by_id(self.selected_product_id)
-            if product:
-                product.update(payload)
-                self.form_status.setText("Product changes saved locally. API PUT can be wired here.")
-        else:
-            payload["id"] = max(product["id"] for product in self.products) + 1 if self.products else 1
-            self.products.append(payload)
-            self.selected_product_id = payload["id"]
-            self.form_status.setText("Product added locally. API POST can be wired here.")
-
-        self._refresh_categories()
-        self._refresh_table()
+        QMessageBox.information(
+            self,
+            "Product endpoint pending",
+            "Product data is not saved locally because the backend does not expose product endpoints yet.",
+        )
 
     def _delete_product(self):
-        if not self.selected_product_id:
-            self.form_status.setText("Select a product before deleting.")
-            return
-        product = self._product_by_id(self.selected_product_id)
-        if not product:
-            return
-        self.products = [row for row in self.products if row["id"] != self.selected_product_id]
-        self.form_status.setText(f"Deleted {product['name']} locally. API DELETE can be wired here.")
-        self._refresh_categories()
-        self._refresh_table()
-        self._start_new_product()
+        self.form_status.setText("Product delete is disabled until the backend exposes product endpoints.")
