@@ -7,10 +7,13 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
+
+from models.api_client import ApiError
 
 try:
     from view.components import (
@@ -33,8 +36,9 @@ except ModuleNotFoundError:
 
 
 class Profile_Tab(QWidget):
-    def __init__(self):
+    def __init__(self, auth_model=None):
         super().__init__()
+        self.auth_model = auth_model
         root = QVBoxLayout(self)
         root.setContentsMargins(22, 22, 22, 22)
         root.setSpacing(18)
@@ -52,6 +56,7 @@ class Profile_Tab(QWidget):
         content.addWidget(self._build_qr_panel(), 2)
         root.addLayout(content, 1)
 
+        self._load_business_profile()
         self._refresh_qr()
 
     def _build_profile_form(self):
@@ -87,10 +92,10 @@ class Profile_Tab(QWidget):
         save_button.clicked.connect(self._save_profile)
         actions.addWidget(save_button)
         actions.addStretch(1)
-        actions.addWidget(make_badge("GET /profile + PUT /profile", "accent"))
+        actions.addWidget(make_badge("PUT /business/auth/edit", "accent"))
         layout.addLayout(actions)
 
-        self.profile_status = make_label("Profile edits are stored locally until API wiring is added.", "muted")
+        self.profile_status = make_label("Business name, email, and QR base URL can be saved to backend.", "muted")
         self.profile_status.setWordWrap(True)
         layout.addWidget(self.profile_status)
         layout.addStretch(1)
@@ -138,6 +143,18 @@ class Profile_Tab(QWidget):
         layout.addStretch(1)
         return card
 
+    def _load_business_profile(self):
+        business = self.auth_model.business if self.auth_model else None
+        if not business:
+            return
+
+        self.business_name.setText(business.get("name") or "")
+        self.email.setText(business.get("email") or "")
+        qr_base_url = business.get("qr_base_url")
+        if qr_base_url:
+            self.menu_url.setText(qr_base_url)
+        self.profile_status.setText("Business profile loaded from backend login response.")
+
     def _refresh_qr(self):
         if hasattr(self, "qr_label"):
             self.qr_label.setPixmap(build_qr_pixmap(self.menu_url.text(), 188))
@@ -151,7 +168,17 @@ class Profile_Tab(QWidget):
         self.qr_status.setText("Menu preview opened in the default browser.")
 
     def _save_profile(self):
-        self.profile_status.setText(
-            f"Saved {self.business_name.text()} locally. API PUT /profile can be wired here."
-        )
+        if self.auth_model and self.auth_model.is_authenticated:
+            try:
+                self.auth_model.update_business(
+                    name=self.business_name.text().strip(),
+                    email=self.email.text().strip(),
+                    qr_base_url=self.menu_url.text().strip(),
+                )
+            except ApiError as exc:
+                QMessageBox.warning(self, "Profile save failed", str(exc))
+                return
+            self.profile_status.setText(f"Saved {self.business_name.text()} to backend.")
+        else:
+            self.profile_status.setText(f"Saved {self.business_name.text()} locally.")
         self._refresh_qr()

@@ -15,6 +15,8 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from models.api_client import ApiError
+
 try:
     from view.components import (
         SectionHeader,
@@ -38,20 +40,25 @@ except ModuleNotFoundError:
 
 
 class Catagory_Tab(QWidget):
-    def __init__(self):
+    def __init__(self, category_controller=None):
         super().__init__()
-        self.categories = [
-            {"id": 1, "name": "Starters", "slug": "starters", "order": 1, "status": "Visible"},
-            {"id": 2, "name": "Main Courses", "slug": "main-courses", "order": 2, "status": "Visible"},
-            {"id": 3, "name": "Desserts", "slug": "desserts", "order": 3, "status": "Visible"},
-            {"id": 4, "name": "Drinks", "slug": "drinks", "order": 4, "status": "Visible"},
-        ]
-        self.product_map = {
-            "Starters": ["Caesar Salad", "Soup of the Day"],
-            "Main Courses": ["Classic Burger", "Grilled Chicken"],
-            "Desserts": ["Chocolate Souffle", "Tiramisu"],
-            "Drinks": ["Iced Latte", "Fresh Lemonade", "Sparkling Water"],
-        }
+        self.category_controller = category_controller
+        if self.category_controller:
+            self.categories = []
+            self.product_map = {}
+        else:
+            self.categories = [
+                {"id": 1, "name": "Starters", "slug": "starters", "order": 1, "status": "Visible"},
+                {"id": 2, "name": "Main Courses", "slug": "main-courses", "order": 2, "status": "Visible"},
+                {"id": 3, "name": "Desserts", "slug": "desserts", "order": 3, "status": "Visible"},
+                {"id": 4, "name": "Drinks", "slug": "drinks", "order": 4, "status": "Visible"},
+            ]
+            self.product_map = {
+                "Starters": ["Caesar Salad", "Soup of the Day"],
+                "Main Courses": ["Classic Burger", "Grilled Chicken"],
+                "Desserts": ["Chocolate Souffle", "Tiramisu"],
+                "Drinks": ["Iced Latte", "Fresh Lemonade", "Sparkling Water"],
+            }
         self.selected_category_id = None
 
         root = QVBoxLayout(self)
@@ -60,11 +67,13 @@ class Catagory_Tab(QWidget):
 
         add_button = make_button("Add Category", "primary")
         add_button.clicked.connect(self._start_new_category)
+        refresh_button = make_button("Refresh")
+        refresh_button.clicked.connect(self._load_categories)
         root.addWidget(
             SectionHeader(
                 "Category Management",
                 "Create menu sections, control visibility, and keep product assignments tidy.",
-                [add_button],
+                [refresh_button, add_button],
             )
         )
 
@@ -84,11 +93,14 @@ class Catagory_Tab(QWidget):
         content.addWidget(self._build_editor(), 2)
         root.addLayout(content, 1)
 
-        self._refresh_table()
-        if self.table.rowCount():
-            self.table.selectRow(0)
+        if self.category_controller:
+            self._load_categories()
         else:
-            self._start_new_category()
+            self._refresh_table()
+            if self.table.rowCount():
+                self.table.selectRow(0)
+            else:
+                self._start_new_category()
 
     def _build_table(self):
         card = make_card()
@@ -153,6 +165,50 @@ class Catagory_Tab(QWidget):
         self.form_status.setWordWrap(True)
         layout.addWidget(self.form_status)
         return card
+
+    def _load_categories(self):
+        if not self.category_controller:
+            self._refresh_table()
+            return
+
+        try:
+            api_categories = self.category_controller.load_categories()
+        except ApiError as exc:
+            self.form_status.setText(f"Backend sync failed: {exc}")
+            return
+
+        previous_product_map = self.product_map
+        self.categories = [
+            self._category_from_api(category, index + 1)
+            for index, category in enumerate(api_categories)
+        ]
+        self.product_map = {
+            category["name"]: previous_product_map.get(category["name"], [])
+            for category in self.categories
+        }
+        self.selected_category_id = None
+        self._refresh_table()
+        if self.table.rowCount():
+            self.table.selectRow(0)
+            self.form_status.setText("Categories loaded from backend.")
+        else:
+            self._start_new_category()
+            self.form_status.setText("No categories found on backend.")
+
+    def _category_from_api(self, category, order):
+        name = category.get("name", "")
+        return {
+            "id": category.get("_id") or category.get("id"),
+            "name": name,
+            "slug": self._slug_for(name),
+            "order": order,
+            "status": "Visible",
+            "business_id": category.get("business_id"),
+            "created_at": category.get("created_at"),
+        }
+
+    def _slug_for(self, value):
+        return value.strip().lower().replace(" ", "-")
 
     def _refresh_table(self):
         self.categories.sort(key=lambda item: item["order"])
@@ -220,7 +276,7 @@ class Catagory_Tab(QWidget):
             QMessageBox.warning(self, "Missing category name", "Category name is required.")
             return
         if not slug:
-            slug = name.lower().replace(" ", "-")
+            slug = self._slug_for(name)
 
         payload = {
             "name": name,
@@ -233,16 +289,37 @@ class Catagory_Tab(QWidget):
             category = self._category_by_id(self.selected_category_id)
             if category:
                 old_name = category["name"]
+                if self.category_controller:
+                    try:
+                        api_category = self.category_controller.update_category(self.selected_category_id, name)
+                    except ApiError as exc:
+                        QMessageBox.warning(self, "Category update failed", str(exc))
+                        return
+                    payload.update(self._category_from_api(api_category, payload["order"]))
+                    payload["slug"] = slug
+                    payload["status"] = self.status_input.currentText()
                 category.update(payload)
                 if old_name != name:
                     self.product_map[name] = self.product_map.pop(old_name, [])
-                self.form_status.setText("Category changes saved locally. API PUT can be wired here.")
+                status_text = "Category changes saved to backend." if self.category_controller else "Category changes saved locally."
+                self.form_status.setText(status_text)
         else:
-            payload["id"] = max(category["id"] for category in self.categories) + 1 if self.categories else 1
+            if self.category_controller:
+                try:
+                    api_category = self.category_controller.create_category(name)
+                except ApiError as exc:
+                    QMessageBox.warning(self, "Category create failed", str(exc))
+                    return
+                payload.update(self._category_from_api(api_category, len(self.categories) + 1))
+                payload["slug"] = slug
+                payload["status"] = self.status_input.currentText()
+            else:
+                payload["id"] = max(category["id"] for category in self.categories) + 1 if self.categories else 1
             self.categories.append(payload)
             self.product_map.setdefault(name, [])
             self.selected_category_id = payload["id"]
-            self.form_status.setText("Category added locally. API POST can be wired here.")
+            status_text = "Category added to backend." if self.category_controller else "Category added locally."
+            self.form_status.setText(status_text)
 
         self._refresh_table()
         self._refresh_assigned_products(name)
@@ -261,8 +338,15 @@ class Catagory_Tab(QWidget):
                 "Move or remove assigned products before deleting this category.",
             )
             return
+        if self.category_controller:
+            try:
+                self.category_controller.delete_category(self.selected_category_id)
+            except ApiError as exc:
+                QMessageBox.warning(self, "Category delete failed", str(exc))
+                return
         self.categories = [row for row in self.categories if row["id"] != self.selected_category_id]
-        self.form_status.setText(f"Deleted {category['name']} locally. API DELETE can be wired here.")
+        status_text = "from backend" if self.category_controller else "locally"
+        self.form_status.setText(f"Deleted {category['name']} {status_text}.")
         self._refresh_table()
         self._start_new_category()
 
