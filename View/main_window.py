@@ -26,6 +26,7 @@ from controllers.category_controller import CategoryController
 from models.api_client import ApiClient, ApiError
 from models.auth_model import AuthModel
 from models.category_model import CategoryModel
+from utils.config import API_BASE_URL
 
 try:
     from view.components import app_stylesheet, make_badge, make_button, make_card, make_label
@@ -72,8 +73,8 @@ class Main_Window(QMainWindow):
         outer_layout.setContentsMargins(24, 24, 24, 24)
 
         card = make_card()
-        card.setMaximumWidth(430)
-        card.setMinimumWidth(390)
+        card.setMaximumWidth(560)
+        card.setMinimumWidth(460)
         form_layout = QGridLayout(card)
         form_layout.setContentsMargins(28, 28, 28, 28)
         form_layout.setHorizontalSpacing(14)
@@ -92,6 +93,12 @@ class Main_Window(QMainWindow):
 
         label_font = QFont()
         label_font.setPointSize(11)
+
+        api_url_label = QLabel("Backend API URL")
+        api_url_label.setFont(label_font)
+        self.api_url_input = QLineEdit(API_BASE_URL)
+        self.api_url_input.setPlaceholderText("https://qrmenu.dovanay.com/api/v1")
+        self.api_url_input.setFont(label_font)
 
         email_label = QLabel("Email")
         email_label.setFont(label_font)
@@ -117,12 +124,14 @@ class Main_Window(QMainWindow):
 
         form_layout.addWidget(title, 0, 0, 1, 2)
         form_layout.addWidget(subtitle, 1, 0, 1, 2)
-        form_layout.addWidget(email_label, 2, 0)
-        form_layout.addWidget(self.email_input, 2, 1)
-        form_layout.addWidget(password_label, 3, 0)
-        form_layout.addWidget(self.password_input, 3, 1)
-        form_layout.addWidget(login_button, 4, 0, 1, 2)
-        form_layout.addWidget(register_button, 5, 0, 1, 2)
+        form_layout.addWidget(api_url_label, 2, 0)
+        form_layout.addWidget(self.api_url_input, 2, 1)
+        form_layout.addWidget(email_label, 3, 0)
+        form_layout.addWidget(self.email_input, 3, 1)
+        form_layout.addWidget(password_label, 4, 0)
+        form_layout.addWidget(self.password_input, 4, 1)
+        form_layout.addWidget(login_button, 5, 0, 1, 2)
+        form_layout.addWidget(register_button, 6, 0, 1, 2)
 
         outer_layout.addWidget(card)
         return page
@@ -135,8 +144,8 @@ class Main_Window(QMainWindow):
         outer_layout.setContentsMargins(24, 24, 24, 24)
 
         card = make_card()
-        card.setMaximumWidth(520)
-        card.setMinimumWidth(430)
+        card.setMaximumWidth(620)
+        card.setMinimumWidth(500)
         form_layout = QGridLayout(card)
         form_layout.setContentsMargins(28, 28, 28, 28)
         form_layout.setHorizontalSpacing(14)
@@ -155,6 +164,12 @@ class Main_Window(QMainWindow):
 
         label_font = QFont()
         label_font.setPointSize(11)
+
+        api_url_label = QLabel("Backend API URL")
+        api_url_label.setFont(label_font)
+        self.register_api_url_input = QLineEdit(API_BASE_URL)
+        self.register_api_url_input.setPlaceholderText("https://qrmenu.dovanay.com/api/v1")
+        self.register_api_url_input.setFont(label_font)
 
         name_label = QLabel("Business name")
         name_label.setFont(label_font)
@@ -185,7 +200,7 @@ class Main_Window(QMainWindow):
         qr_label = QLabel("QR base URL")
         qr_label.setFont(label_font)
         self.register_qr_url_input = QLineEdit()
-        self.register_qr_url_input.setPlaceholderText("https://your-domain.com/menu")
+        self.register_qr_url_input.setPlaceholderText("https://qrmenu.dovanay.com/menu/your-business")
         self.register_qr_url_input.setFont(label_font)
 
         create_button = make_button("Create Account", "primary")
@@ -199,18 +214,20 @@ class Main_Window(QMainWindow):
 
         form_layout.addWidget(title, 0, 0, 1, 2)
         form_layout.addWidget(subtitle, 1, 0, 1, 2)
-        form_layout.addWidget(name_label, 2, 0)
-        form_layout.addWidget(self.register_name_input, 2, 1)
-        form_layout.addWidget(email_label, 3, 0)
-        form_layout.addWidget(self.register_email_input, 3, 1)
-        form_layout.addWidget(password_label, 4, 0)
-        form_layout.addWidget(self.register_password_input, 4, 1)
-        form_layout.addWidget(confirm_label, 5, 0)
-        form_layout.addWidget(self.register_confirm_input, 5, 1)
-        form_layout.addWidget(qr_label, 6, 0)
-        form_layout.addWidget(self.register_qr_url_input, 6, 1)
-        form_layout.addWidget(create_button, 7, 0)
-        form_layout.addWidget(back_button, 7, 1)
+        form_layout.addWidget(api_url_label, 2, 0)
+        form_layout.addWidget(self.register_api_url_input, 2, 1)
+        form_layout.addWidget(name_label, 3, 0)
+        form_layout.addWidget(self.register_name_input, 3, 1)
+        form_layout.addWidget(email_label, 4, 0)
+        form_layout.addWidget(self.register_email_input, 4, 1)
+        form_layout.addWidget(password_label, 5, 0)
+        form_layout.addWidget(self.register_password_input, 5, 1)
+        form_layout.addWidget(confirm_label, 6, 0)
+        form_layout.addWidget(self.register_confirm_input, 6, 1)
+        form_layout.addWidget(qr_label, 7, 0)
+        form_layout.addWidget(self.register_qr_url_input, 7, 1)
+        form_layout.addWidget(create_button, 8, 0)
+        form_layout.addWidget(back_button, 8, 1)
 
         outer_layout.addWidget(card)
         return page
@@ -263,9 +280,13 @@ class Main_Window(QMainWindow):
     def _handle_login(self):
         entered_email = self.email_input.text().strip()
         entered_password = self.password_input.text()
+        api_base_url = self.api_url_input.text().strip()
 
         if not entered_email or not entered_password:
             QMessageBox.warning(self, "Login failed", "Email and password are required.")
+            return
+
+        if not self._apply_api_base_url(api_base_url, "Login failed"):
             return
 
         try:
@@ -282,9 +303,13 @@ class Main_Window(QMainWindow):
         password = self.register_password_input.text()
         password_confirm = self.register_confirm_input.text()
         qr_base_url = self.register_qr_url_input.text().strip()
+        api_base_url = self.register_api_url_input.text().strip()
 
         if not name or not email or not password:
             QMessageBox.warning(self, "Register failed", "Business name, email, and password are required.")
+            return
+
+        if not self._apply_api_base_url(api_base_url, "Register failed"):
             return
 
         if password != password_confirm:
@@ -301,12 +326,32 @@ class Main_Window(QMainWindow):
         self.password_input.clear()
         self._show_home_page()
 
+    def _apply_api_base_url(self, value, title):
+        api_base_url = self._normalize_api_base_url(value)
+        if not api_base_url:
+            QMessageBox.warning(self, title, "Backend API URL is required.")
+            return False
+        self.api_client.set_base_url(api_base_url)
+        self.api_url_input.setText(api_base_url)
+        self.register_api_url_input.setText(api_base_url)
+        return True
+
+    def _normalize_api_base_url(self, value):
+        api_base_url = value.strip().rstrip("/")
+        if not api_base_url:
+            return ""
+        if api_base_url.endswith("/api/v1"):
+            return api_base_url
+        return f"{api_base_url}/api/v1"
+
     def _show_register_page(self):
         if not self.register_email_input.text().strip():
             self.register_email_input.setText(self.email_input.text().strip())
+        self.register_api_url_input.setText(self.api_url_input.text().strip())
         self.stack.setCurrentWidget(self.register_page)
 
     def _show_login_page(self):
+        self.api_url_input.setText(self.register_api_url_input.text().strip())
         self.stack.setCurrentWidget(self.login_page)
 
     def _show_home_page(self):

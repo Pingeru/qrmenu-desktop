@@ -7,8 +7,10 @@ QR Menu Builder Desktop App
 The desktop client reads `QRMENU_API_BASE_URL` and defaults to:
 
 ```text
-http://localhost:3005/api/v1
+https://qrmenu.dovanay.com/api/v1
 ```
+
+The login and register screens also include a `Backend API URL` field. Use the API base URL there, not the QR menu URL. The QR base URL is the customer-facing menu URL for the business profile.
 
 Currently wired backend features:
 

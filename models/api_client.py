@@ -28,6 +28,9 @@ class ApiClient:
     def set_access_token(self, access_token: str | None):
         self.access_token = access_token
 
+    def set_base_url(self, base_url: str):
+        self.base_url = base_url.rstrip("/")
+
     def set_unauthorized_handler(self, handler):
         self.unauthorized_handler = handler
 
