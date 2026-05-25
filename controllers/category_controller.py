@@ -7,8 +7,11 @@ class CategoryController:
     def __init__(self, category_model: CategoryModel | None = None):
         self.category_model = category_model or CategoryModel()
 
-    def load_categories(self):
-        return self.category_model.list_categories()
+    def load_categories(self, business_id: str | None = None):
+        return self.category_model.list_categories(business_id=business_id)
+
+    def get_category(self, category_id: str):
+        return self.category_model.get_category(category_id)
 
     def create_category(self, name: str):
         return self.category_model.create_category(name)

@@ -23,9 +23,11 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from controllers.category_controller import CategoryController
+from controllers.product_controller import ProductController
 from models.api_client import ApiClient, ApiError
 from models.auth_model import AuthModel
 from models.category_model import CategoryModel
+from models.product_model import ProductModel
 from utils.config import API_BASE_URL
 
 try:
@@ -55,6 +57,7 @@ class Main_Window(QMainWindow):
         self.api_client = ApiClient()
         self.auth_model = AuthModel(self.api_client)
         self.category_controller = CategoryController(CategoryModel(self.api_client))
+        self.product_controller = ProductController(ProductModel(self.api_client))
 
         self.stack = QStackedWidget()
         self.login_page = self._create_login_page()
@@ -268,10 +271,23 @@ class Main_Window(QMainWindow):
         tab_font.setPointSize(11)
         tab_font.setBold(True)
         tabs.setFont(tab_font)
-        tabs.addTab(Catagory_Tab(category_controller=self.category_controller), "Categories")
-        tabs.addTab(Product_Tab(), "Products")
+        tabs.addTab(
+            Catagory_Tab(category_controller=self.category_controller, auth_model=self.auth_model),
+            "Categories",
+        )
+        tabs.addTab(
+            Product_Tab(
+                product_controller=self.product_controller,
+                category_controller=self.category_controller,
+                auth_model=self.auth_model,
+            ),
+            "Products",
+        )
         tabs.addTab(Order_Tab(), "Live Orders")
-        tabs.addTab(Profile_Tab(auth_model=self.auth_model), "Profile && QR")
+        tabs.addTab(
+            Profile_Tab(auth_model=self.auth_model, on_account_deleted=self._handle_account_deleted),
+            "Profile && QR",
+        )
         tabs.addTab(Analytics_Tab(), "Analytics")
 
         layout.addWidget(tabs, 1)
@@ -368,6 +384,16 @@ class Main_Window(QMainWindow):
         self.password_input.clear()
         self.register_password_input.clear()
         self.register_confirm_input.clear()
+        self.stack.setCurrentWidget(self.login_page)
+
+    def _handle_account_deleted(self):
+        self.password_input.clear()
+        self.register_password_input.clear()
+        self.register_confirm_input.clear()
+        if self.home_page is not None:
+            self.stack.removeWidget(self.home_page)
+            self.home_page.deleteLater()
+            self.home_page = None
         self.stack.setCurrentWidget(self.login_page)
 
 

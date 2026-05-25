@@ -36,9 +36,10 @@ except ModuleNotFoundError:
 
 
 class Profile_Tab(QWidget):
-    def __init__(self, auth_model=None):
+    def __init__(self, auth_model=None, on_account_deleted=None):
         super().__init__()
         self.auth_model = auth_model
+        self.on_account_deleted = on_account_deleted
         root = QVBoxLayout(self)
         root.setContentsMargins(22, 22, 22, 22)
         root.setSpacing(18)
@@ -71,13 +72,28 @@ class Profile_Tab(QWidget):
         form.setHorizontalSpacing(12)
         form.setVerticalSpacing(10)
 
-        self.business_name = QLineEdit("North Pier Cafe")
-        self.owner_name = QLineEdit("Admin Manager")
-        self.email = QLineEdit("owner@northpier.example")
-        self.phone = QLineEdit("+90 555 010 22 44")
-        self.address = QTextEdit("Kemeralti Street No: 14, Izmir")
+        self.business_name = QLineEdit()
+        self.owner_name = QLineEdit()
+        self.email = QLineEdit()
+        self.phone = QLineEdit()
+        self.address = QTextEdit()
         self.address.setFixedHeight(76)
-        self.hours = QLineEdit("09:00 - 23:00")
+        self.hours = QLineEdit()
+        self.password = QLineEdit()
+        self.password.setEchoMode(QLineEdit.Password)
+        self.password_confirm = QLineEdit()
+        self.password_confirm.setEchoMode(QLineEdit.Password)
+
+        for field in [self.owner_name, self.phone, self.address, self.hours]:
+            field.setEnabled(False)
+            field.setToolTip("qrmenu-api does not expose this business profile field yet.")
+
+        self.owner_name.setPlaceholderText("Endpoint pending")
+        self.phone.setPlaceholderText("Endpoint pending")
+        self.address.setPlaceholderText("Endpoint pending")
+        self.hours.setPlaceholderText("Endpoint pending")
+        self.password.setPlaceholderText("Leave blank to keep current password")
+        self.password_confirm.setPlaceholderText("Repeat new password")
 
         form.addRow("Business name", self.business_name)
         form.addRow("Owner name", self.owner_name)
@@ -85,17 +101,25 @@ class Profile_Tab(QWidget):
         form.addRow("Phone", self.phone)
         form.addRow("Address", self.address)
         form.addRow("Opening hours", self.hours)
+        form.addRow("New password", self.password)
+        form.addRow("Confirm password", self.password_confirm)
         layout.addLayout(form)
 
         actions = QHBoxLayout()
         save_button = make_button("Save Profile", "primary")
         save_button.clicked.connect(self._save_profile)
+        delete_button = make_button("Delete Account", "danger")
+        delete_button.clicked.connect(self._delete_account)
         actions.addWidget(save_button)
+        actions.addWidget(delete_button)
         actions.addStretch(1)
-        actions.addWidget(make_badge("PUT /business/auth/edit", "accent"))
+        actions.addWidget(make_badge("PUT/DELETE /business/auth", "accent"))
         layout.addLayout(actions)
 
-        self.profile_status = make_label("Business name, email, and QR base URL can be saved to backend.", "muted")
+        self.profile_status = make_label(
+            "Business name, email, QR base URL, password, and account deletion are connected to qrmenu-api.",
+            "muted",
+        )
         self.profile_status.setWordWrap(True)
         layout.addWidget(self.profile_status)
         layout.addStretch(1)
@@ -115,7 +139,8 @@ class Profile_Tab(QWidget):
             )
         )
 
-        self.menu_url = QLineEdit("https://qr-menu.example/north-pier")
+        self.menu_url = QLineEdit()
+        self.menu_url.setPlaceholderText("https://qrmenu.dovanay.com/menu/your-business")
         self.menu_url.textChanged.connect(self._refresh_qr)
         layout.addWidget(self.menu_url)
 
@@ -169,16 +194,52 @@ class Profile_Tab(QWidget):
 
     def _save_profile(self):
         if self.auth_model and self.auth_model.is_authenticated:
+            password = self.password.text()
+            password_confirm = self.password_confirm.text()
+            if password or password_confirm:
+                if password != password_confirm:
+                    QMessageBox.warning(self, "Profile save failed", "Passwords do not match.")
+                    return
             try:
-                self.auth_model.update_business(
-                    name=self.business_name.text().strip(),
-                    email=self.email.text().strip(),
-                    qr_base_url=self.menu_url.text().strip(),
-                )
+                fields = {
+                    "name": self.business_name.text().strip(),
+                    "email": self.email.text().strip(),
+                    "qr_base_url": self.menu_url.text().strip(),
+                }
+                if password:
+                    fields["password"] = password
+                self.auth_model.update_business(**fields)
             except ApiError as exc:
                 QMessageBox.warning(self, "Profile save failed", str(exc))
                 return
+            self.password.clear()
+            self.password_confirm.clear()
             self.profile_status.setText(f"Saved {self.business_name.text()} to backend.")
         else:
-            self.profile_status.setText(f"Saved {self.business_name.text()} locally.")
+            self.profile_status.setText("Login is required before profile data can be saved to backend.")
         self._refresh_qr()
+
+    def _delete_account(self):
+        if not self.auth_model or not self.auth_model.is_authenticated:
+            self.profile_status.setText("Login is required before the backend account can be deleted.")
+            return
+
+        choice = QMessageBox.question(
+            self,
+            "Delete account",
+            "This will delete the business account from qrmenu-api and log you out. Continue?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if choice != QMessageBox.Yes:
+            return
+
+        try:
+            self.auth_model.delete_business()
+        except ApiError as exc:
+            QMessageBox.warning(self, "Account delete failed", str(exc))
+            return
+
+        self.profile_status.setText("Business account deleted from backend.")
+        if self.on_account_deleted:
+            self.on_account_deleted()

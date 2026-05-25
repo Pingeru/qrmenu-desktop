@@ -1,4 +1,3 @@
-
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QFileDialog,
@@ -18,6 +17,8 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from models.api_client import ApiError
 
 try:
     from view.components import (
@@ -42,30 +43,35 @@ except ModuleNotFoundError:
 
 
 class Product_Tab(QWidget):
-    def __init__(self):
+    def __init__(self, product_controller=None, category_controller=None, auth_model=None):
         super().__init__()
+        self.product_controller = product_controller
+        self.category_controller = category_controller
+        self.auth_model = auth_model
         self.products = []
+        self.categories = []
         self.selected_product_id = None
+        self.selected_image_path = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(22, 22, 22, 22)
         root.setSpacing(18)
 
-        add_button = make_button("Add Product", "primary")
-        add_button.setEnabled(False)
-        add_button.setToolTip("Product endpoints are not available in the backend yet.")
-        add_button.clicked.connect(self._start_new_product)
+        self.add_button = make_button("Add Product", "primary")
+        self.add_button.clicked.connect(self._start_new_product)
+        refresh_button = make_button("Refresh")
+        refresh_button.clicked.connect(self._load_backend_data)
         root.addWidget(
             SectionHeader(
                 "Product Management",
-                "Product endpoints are not available yet; this view will stay empty until the backend is ready.",
-                [add_button],
+                "Create and manage menu products through qrmenu-api product endpoints.",
+                [refresh_button, self.add_button],
             )
         )
 
         summary = QHBoxLayout()
         summary.setSpacing(12)
-        self.total_card = StatCard("Total products", "0", "Backend endpoint pending")
+        self.total_card = StatCard("Total products", "0", "Loaded from backend")
         self.visible_card = StatCard("Visible", "0", "Shown on QR menu", "green")
         self.hidden_card = StatCard("Hidden", "0", "Kept out of customer menu", "amber")
         summary.addWidget(self.total_card)
@@ -81,12 +87,8 @@ class Product_Tab(QWidget):
         content.setSizes([210, 620, 350])
         root.addWidget(content, 1)
 
-        self._refresh_categories()
-        self._refresh_table()
-        if self.table.rowCount():
-            self.table.selectRow(0)
-        else:
-            self._start_new_product()
+        self._set_controls_enabled()
+        self._load_backend_data()
 
     def _build_category_filter(self):
         card = make_card()
@@ -114,7 +116,7 @@ class Product_Tab(QWidget):
         toolbar = QHBoxLayout()
         toolbar.addWidget(make_label("Menu Items", "section-title"))
         toolbar.addStretch(1)
-        self.table_hint = make_badge("Awaiting API", "neutral")
+        self.table_hint = make_badge("API connected", "accent")
         toolbar.addWidget(self.table_hint)
         layout.addLayout(toolbar)
 
@@ -141,17 +143,13 @@ class Product_Tab(QWidget):
 
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("Product name")
-
         self.category_input = QComboBox()
-
         self.price_input = QDoubleSpinBox()
         self.price_input.setRange(0, 99999)
         self.price_input.setDecimals(2)
         self.price_input.setPrefix("$ ")
-
         self.status_input = QComboBox()
         self.status_input.addItems(["Visible", "Hidden"])
-
         self.description_input = QTextEdit()
         self.description_input.setPlaceholderText("Short customer-facing description")
         self.description_input.setFixedHeight(92)
@@ -171,30 +169,104 @@ class Product_Tab(QWidget):
         self.image_label = QLabel("No image selected")
         self.image_label.setWordWrap(True)
         self.image_label.setStyleSheet("color: #667585;")
-        upload_button = make_button("Upload Image")
-        upload_button.clicked.connect(self._choose_image)
+        self.upload_button = make_button("Upload Image")
+        self.upload_button.clicked.connect(self._choose_image)
         image_layout.addWidget(self.image_label)
-        image_layout.addWidget(upload_button)
+        image_layout.addWidget(self.upload_button)
         layout.addWidget(image_card)
 
         actions = QHBoxLayout()
-        save_button = make_button("Save Changes", "primary")
-        save_button.setEnabled(False)
-        save_button.setToolTip("Product save is disabled until backend product endpoints exist.")
-        save_button.clicked.connect(self._save_product)
-        delete_button = make_button("Delete", "danger")
-        delete_button.setEnabled(False)
-        delete_button.setToolTip("Product delete is disabled until backend product endpoints exist.")
-        delete_button.clicked.connect(self._delete_product)
-        actions.addWidget(save_button)
-        actions.addWidget(delete_button)
+        self.save_button = make_button("Save Changes", "primary")
+        self.save_button.clicked.connect(self._save_product)
+        self.delete_button = make_button("Delete", "danger")
+        self.delete_button.clicked.connect(self._delete_product)
+        actions.addWidget(self.save_button)
+        actions.addWidget(self.delete_button)
         layout.addLayout(actions)
 
-        self.form_status = make_label("No product data is loaded because the backend does not expose product endpoints yet.", "muted")
+        self.form_status = make_label("Products are loaded from qrmenu-api.", "muted")
         self.form_status.setWordWrap(True)
         layout.addWidget(self.form_status)
         layout.addStretch(1)
         return card
+
+    def _load_backend_data(self):
+        if not self.product_controller or not self.category_controller:
+            self.products = []
+            self.categories = []
+            self.form_status.setText("Product endpoints are not connected in this app instance.")
+            self._refresh_categories()
+            self._refresh_table()
+            self._start_new_product()
+            return
+
+        try:
+            api_categories = self.category_controller.load_categories(self._business_id())
+        except ApiError as exc:
+            self.form_status.setText(f"Category sync failed: {exc}")
+            return
+
+        self.categories = [self._category_from_api(category) for category in api_categories]
+        self.products = []
+        load_errors = []
+        for category in self.categories:
+            try:
+                api_products = self.product_controller.load_products_by_category(category["id"])
+            except ApiError as exc:
+                load_errors.append(f"{category['name']}: {exc}")
+                continue
+            self.products.extend(self._product_from_api(product) for product in api_products)
+
+        self.selected_product_id = None
+        self.selected_image_path = None
+        self._refresh_categories()
+        self._refresh_table()
+        self._set_controls_enabled()
+
+        if load_errors:
+            self.form_status.setText("Some product categories could not be loaded.")
+        elif not self.categories:
+            self.form_status.setText("Create a category before adding products.")
+        elif not self.products:
+            self.form_status.setText("No products found on backend.")
+        else:
+            self.form_status.setText("Products loaded from backend.")
+
+        if self.table.rowCount():
+            self.table.selectRow(0)
+        else:
+            self._start_new_product()
+
+    def _category_from_api(self, category):
+        name = category.get("name") or "Unnamed category"
+        return {
+            "id": category.get("_id") or category.get("id"),
+            "name": name,
+        }
+
+    def _business_id(self):
+        business = self.auth_model.business if self.auth_model else None
+        return business.get("_id") if business else None
+
+    def _product_from_api(self, product):
+        category_id = product.get("category_id")
+        image_path = product.get("image_path")
+        return {
+            "id": product.get("_id") or product.get("id"),
+            "name": product.get("name") or "",
+            "category_id": category_id,
+            "category": self._category_name_by_id(category_id),
+            "price": float(product.get("price") or 0),
+            "status": "Visible" if product.get("is_active", True) else "Hidden",
+            "is_active": bool(product.get("is_active", True)),
+            "description": product.get("description") or "",
+            "image": image_path or "No image",
+            "image_path": image_path,
+        }
+
+    def _category_name_by_id(self, category_id):
+        category = next((item for item in self.categories if item["id"] == category_id), None)
+        return category["name"] if category else "Unknown category"
 
     def _refresh_categories(self):
         selected = self.category_list.currentItem().text() if self.category_list.currentItem() else None
@@ -202,24 +274,22 @@ class Product_Tab(QWidget):
         self.category_list.clear()
         all_item = QListWidgetItem("All categories")
         self.category_list.addItem(all_item)
-        for category in self._categories():
-            count = sum(1 for product in self.products if product["category"] == category)
-            self.category_list.addItem(QListWidgetItem(f"{category} ({count})"))
+        for category in self.categories:
+            count = sum(1 for product in self.products if product["category_id"] == category["id"])
+            self.category_list.addItem(QListWidgetItem(f"{category['name']} ({count})"))
         matches = self.category_list.findItems(selected or "All categories", Qt.MatchExactly)
         self.category_list.setCurrentItem(matches[0] if matches else all_item)
         self.category_list.blockSignals(False)
 
-        current_category = self.category_input.currentText()
+        current_category_id = self.category_input.currentData()
         self.category_input.blockSignals(True)
         self.category_input.clear()
-        self.category_input.addItems(self._categories())
-        index = self.category_input.findText(current_category)
+        for category in self.categories:
+            self.category_input.addItem(category["name"], category["id"])
+        index = self.category_input.findData(current_category_id)
         if index >= 0:
             self.category_input.setCurrentIndex(index)
         self.category_input.blockSignals(False)
-
-    def _categories(self):
-        return sorted({product["category"] for product in self.products})
 
     def _selected_category_filter(self):
         item = self.category_list.currentItem()
@@ -269,19 +339,27 @@ class Product_Tab(QWidget):
         if not product:
             return
         self.selected_product_id = product_id
+        self.selected_image_path = product["image_path"]
         self.name_input.setText(product["name"])
-        self.category_input.setCurrentText(product["category"])
+        self._set_category_input(product["category_id"])
         self.price_input.setValue(product["price"])
         self.status_input.setCurrentText(product["status"])
         self.description_input.setPlainText(product["description"])
         self.image_label.setText(product["image"])
         self.form_status.setText(f"Editing {product['name']}.")
+        self._set_controls_enabled()
+
+    def _set_category_input(self, category_id):
+        index = self.category_input.findData(category_id)
+        if index >= 0:
+            self.category_input.setCurrentIndex(index)
 
     def _product_by_id(self, product_id):
         return next((product for product in self.products if product["id"] == product_id), None)
 
     def _start_new_product(self):
         self.selected_product_id = None
+        self.selected_image_path = None
         self.table.clearSelection()
         self.name_input.clear()
         if self.category_input.count():
@@ -290,9 +368,16 @@ class Product_Tab(QWidget):
         self.status_input.setCurrentText("Visible")
         self.description_input.clear()
         self.image_label.setText("No image selected")
-        self.form_status.setText("Product creation is disabled until the backend exposes product endpoints.")
+        if not self.categories:
+            self.form_status.setText("Create a category before adding products.")
+        else:
+            self.form_status.setText("Ready to add a product.")
+        self._set_controls_enabled()
 
     def _choose_image(self):
+        if not self.product_controller:
+            self.form_status.setText("Product image upload needs the product API.")
+            return
         path, _ = QFileDialog.getOpenFileName(
             self,
             "Select Product Image",
@@ -300,14 +385,106 @@ class Product_Tab(QWidget):
             "Images (*.png *.jpg *.jpeg *.webp)",
         )
         if path:
+            self.selected_image_path = path
             self.image_label.setText(path)
 
     def _save_product(self):
-        QMessageBox.information(
-            self,
-            "Product endpoint pending",
-            "Product data is not saved locally because the backend does not expose product endpoints yet.",
-        )
+        if not self.product_controller:
+            QMessageBox.information(
+                self,
+                "Product endpoint pending",
+                "Product data is not saved because the product API is not connected.",
+            )
+            return
+
+        name = self.name_input.text().strip()
+        category_id = self.category_input.currentData()
+        if not name:
+            QMessageBox.warning(self, "Missing product name", "Product name is required.")
+            return
+        if not category_id:
+            QMessageBox.warning(self, "Missing category", "Create or select a category first.")
+            return
+
+        fields = {
+            "name": name,
+            "category_id": category_id,
+            "price": float(self.price_input.value()),
+            "description": self.description_input.toPlainText().strip(),
+            "is_active": self.status_input.currentText() == "Visible",
+            "image_path": self.selected_image_path,
+        }
+
+        try:
+            if self.selected_product_id:
+                saved_product = self.product_controller.update_product(self.selected_product_id, **fields)
+                status_text = "Product changes saved to backend."
+            else:
+                saved_product = self.product_controller.create_product(**fields)
+                status_text = "Product added to backend."
+        except ApiError as exc:
+            QMessageBox.warning(self, "Product save failed", str(exc))
+            return
+
+        saved_product_id = saved_product.get("_id") or saved_product.get("id")
+        self._load_backend_data()
+        self._select_product(saved_product_id)
+        self.form_status.setText(status_text)
 
     def _delete_product(self):
-        self.form_status.setText("Product delete is disabled until the backend exposes product endpoints.")
+        if not self.selected_product_id:
+            self.form_status.setText("Select a product before deleting.")
+            return
+
+        product = self._product_by_id(self.selected_product_id)
+        product_name = product["name"] if product else "this product"
+        choice = QMessageBox.question(
+            self,
+            "Delete product",
+            f"Delete {product_name} from qrmenu-api?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if choice != QMessageBox.Yes:
+            return
+
+        try:
+            self.product_controller.delete_product(self.selected_product_id)
+        except ApiError as exc:
+            QMessageBox.warning(self, "Product delete failed", str(exc))
+            return
+
+        self._load_backend_data()
+        self.form_status.setText(f"Deleted {product_name} from backend.")
+
+    def _select_product(self, product_id):
+        if not product_id:
+            return
+        for row in range(self.table.rowCount()):
+            item = self.table.item(row, 0)
+            if item and item.data(Qt.UserRole) == product_id:
+                self.table.selectRow(row)
+                return
+
+    def _set_controls_enabled(self):
+        connected = bool(self.product_controller and self.category_controller)
+        has_categories = bool(self.categories)
+        self.add_button.setEnabled(connected and has_categories)
+        self.save_button.setEnabled(connected and has_categories)
+        self.upload_button.setEnabled(connected and has_categories)
+        self.delete_button.setEnabled(connected and bool(self.selected_product_id))
+        if not connected:
+            self.add_button.setToolTip("Product endpoints are not connected.")
+            self.save_button.setToolTip("Product endpoints are not connected.")
+            self.upload_button.setToolTip("Product endpoints are not connected.")
+            self.delete_button.setToolTip("Product endpoints are not connected.")
+        elif not has_categories:
+            self.add_button.setToolTip("Create a category before adding products.")
+            self.save_button.setToolTip("Create a category before saving products.")
+            self.upload_button.setToolTip("Create a category before uploading product images.")
+            self.delete_button.setToolTip("Select a product before deleting.")
+        else:
+            self.add_button.setToolTip("Create a new backend product.")
+            self.save_button.setToolTip("Save product to qrmenu-api.")
+            self.upload_button.setToolTip("Attach an image to the next product save.")
+            self.delete_button.setToolTip("Delete selected product from qrmenu-api.")

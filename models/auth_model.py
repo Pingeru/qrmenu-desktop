@@ -58,6 +58,11 @@ class AuthModel:
         self.business = response.get("business", self.business)
         return self.business or {}
 
+    def delete_business(self) -> dict[str, Any]:
+        response = self.api_client.delete("/business/auth/delete")
+        self.logout()
+        return response
+
     def logout(self):
         self.business = None
         self.access_token = None

@@ -43,6 +43,26 @@ class ApiClient:
     def put(self, path: str, payload: dict[str, Any] | None = None, *, auth: bool = True) -> dict[str, Any]:
         return self.request("PUT", path, json_payload=payload, auth=auth)
 
+    def post_form(
+        self,
+        path: str,
+        data: dict[str, Any] | None = None,
+        *,
+        files: dict[str, Any] | None = None,
+        auth: bool = True,
+    ) -> dict[str, Any]:
+        return self.request("POST", path, data_payload=data, files=files, auth=auth)
+
+    def put_form(
+        self,
+        path: str,
+        data: dict[str, Any] | None = None,
+        *,
+        files: dict[str, Any] | None = None,
+        auth: bool = True,
+    ) -> dict[str, Any]:
+        return self.request("PUT", path, data_payload=data, files=files, auth=auth)
+
     def delete(self, path: str, *, auth: bool = True) -> dict[str, Any]:
         return self.request("DELETE", path, auth=auth)
 
@@ -52,6 +72,8 @@ class ApiClient:
         path: str,
         *,
         json_payload: dict[str, Any] | None = None,
+        data_payload: dict[str, Any] | None = None,
+        files: dict[str, Any] | None = None,
         auth: bool = True,
     ) -> dict[str, Any]:
         url = f"{self.base_url}/{path.lstrip('/')}"
@@ -66,6 +88,8 @@ class ApiClient:
                 method,
                 url,
                 json=json_payload,
+                data=data_payload,
+                files=files,
                 headers=headers,
                 timeout=self.timeout,
             )
@@ -78,12 +102,15 @@ class ApiClient:
             except ApiError:
                 refreshed = False
             if refreshed:
+                self._rewind_files(files)
                 headers["Authorization"] = f"Bearer {self.access_token}"
                 try:
                     response = requests.request(
                         method,
                         url,
                         json=json_payload,
+                        data=data_payload,
+                        files=files,
                         headers=headers,
                         timeout=self.timeout,
                     )
@@ -102,3 +129,11 @@ class ApiClient:
             raise ApiError(message or f"Backend returned HTTP {response.status_code}", response.status_code, payload)
 
         return payload if isinstance(payload, dict) else {"data": payload}
+
+    def _rewind_files(self, files: dict[str, Any] | None):
+        if not files:
+            return
+        for value in files.values():
+            file_obj = value[1] if isinstance(value, tuple) and len(value) > 1 else value
+            if hasattr(file_obj, "seek"):
+                file_obj.seek(0)

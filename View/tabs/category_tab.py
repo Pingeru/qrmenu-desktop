@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QListWidget,
     QMessageBox,
+    QAbstractItemView,
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
@@ -40,9 +41,10 @@ except ModuleNotFoundError:
 
 
 class Catagory_Tab(QWidget):
-    def __init__(self, category_controller=None):
+    def __init__(self, category_controller=None, auth_model=None):
         super().__init__()
         self.category_controller = category_controller
+        self.auth_model = auth_model
         if self.category_controller:
             self.categories = []
             self.product_map = {}
@@ -117,6 +119,7 @@ class Catagory_Tab(QWidget):
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(["Order", "Category", "Slug", "Products", "Status"])
         set_table_defaults(self.table)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.itemSelectionChanged.connect(self._load_selected_category)
         layout.addWidget(self.table, 1)
         return card
@@ -172,7 +175,7 @@ class Catagory_Tab(QWidget):
             return
 
         try:
-            api_categories = self.category_controller.load_categories()
+            api_categories = self.category_controller.load_categories(self._business_id())
         except ApiError as exc:
             self.form_status.setText(f"Backend sync failed: {exc}")
             return
@@ -194,6 +197,10 @@ class Catagory_Tab(QWidget):
         else:
             self._start_new_category()
             self.form_status.setText("No categories found on backend.")
+
+    def _business_id(self):
+        business = self.auth_model.business if self.auth_model else None
+        return business.get("_id") if business else None
 
     def _category_from_api(self, category, order):
         name = category.get("name", "")
