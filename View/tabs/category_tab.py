@@ -157,12 +157,12 @@ class Catagory_Tab(QWidget):
         layout.addWidget(self.assigned_products, 1)
 
         actions = QHBoxLayout()
-        save_button = make_button("Save Category", "primary")
-        save_button.clicked.connect(self._save_category)
-        delete_button = make_button("Delete", "danger")
-        delete_button.clicked.connect(self._delete_category)
-        actions.addWidget(save_button)
-        actions.addWidget(delete_button)
+        self.save_button = make_button("Add Category", "primary")
+        self.save_button.clicked.connect(self._save_category)
+        self.delete_button = make_button("Delete", "danger")
+        self.delete_button.clicked.connect(self._delete_category)
+        actions.addWidget(self.save_button)
+        actions.addWidget(self.delete_button)
         layout.addLayout(actions)
 
         self.form_status = make_label("Select a category or create a new one.", "muted")
@@ -248,7 +248,7 @@ class Catagory_Tab(QWidget):
         category = self._category_by_id(category_id)
         if not category:
             return
-        self.editor_mode = "edit"
+        self._set_editor_mode("edit")
         self.selected_category_id = category_id
         self.name_input.setText(category["name"])
         self.slug_input.setText(category["slug"])
@@ -270,7 +270,7 @@ class Catagory_Tab(QWidget):
         return next((category for category in self.categories if category["id"] == category_id), None)
 
     def _start_new_category(self):
-        self.editor_mode = "create"
+        self._set_editor_mode("create")
         self.selected_category_id = None
         was_blocked = self.table.blockSignals(True)
         self.table.clearSelection()
@@ -282,6 +282,19 @@ class Catagory_Tab(QWidget):
         self.assigned_products.clear()
         self.assigned_products.addItem("Products can be assigned after category creation.")
         self.form_status.setText("Ready to add a category.")
+
+    def _set_editor_mode(self, mode):
+        self.editor_mode = mode
+        if not hasattr(self, "save_button"):
+            return
+        if mode == "edit":
+            self.save_button.setText("Save Changes")
+            self.delete_button.setEnabled(True)
+            self.delete_button.setToolTip("Delete the selected category.")
+        else:
+            self.save_button.setText("Add Category")
+            self.delete_button.setEnabled(False)
+            self.delete_button.setToolTip("Select a category from the table before deleting.")
 
     def _save_category(self):
         name = self.name_input.text().strip()
@@ -320,7 +333,7 @@ class Catagory_Tab(QWidget):
                 self._refresh_table()
                 self._refresh_assigned_products(name)
             else:
-                self.editor_mode = "create"
+                self._set_editor_mode("create")
                 self.selected_category_id = None
                 self._create_category(payload, name, slug)
         else:
