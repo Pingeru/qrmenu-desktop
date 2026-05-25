@@ -62,6 +62,7 @@ class Catagory_Tab(QWidget):
                 "Drinks": ["Iced Latte", "Fresh Lemonade", "Sparkling Water"],
             }
         self.selected_category_id = None
+        self.editor_mode = "create"
 
         root = QVBoxLayout(self)
         root.setContentsMargins(22, 22, 22, 22)
@@ -219,6 +220,7 @@ class Catagory_Tab(QWidget):
 
     def _refresh_table(self):
         self.categories.sort(key=lambda item: item["order"])
+        was_blocked = self.table.blockSignals(True)
         self.table.setRowCount(0)
         for category in self.categories:
             row = self.table.rowCount()
@@ -230,6 +232,7 @@ class Catagory_Tab(QWidget):
             self.table.setItem(row, 2, QTableWidgetItem(category["slug"]))
             self.table.setItem(row, 3, QTableWidgetItem(str(len(self.product_map.get(category["name"], [])))))
             self.table.setItem(row, 4, QTableWidgetItem(category["status"]))
+        self.table.blockSignals(was_blocked)
 
         visible = sum(1 for category in self.categories if category["status"] == "Visible")
         assigned = sum(len(products) for products in self.product_map.values())
@@ -245,6 +248,7 @@ class Catagory_Tab(QWidget):
         category = self._category_by_id(category_id)
         if not category:
             return
+        self.editor_mode = "edit"
         self.selected_category_id = category_id
         self.name_input.setText(category["name"])
         self.slug_input.setText(category["slug"])
@@ -266,8 +270,11 @@ class Catagory_Tab(QWidget):
         return next((category for category in self.categories if category["id"] == category_id), None)
 
     def _start_new_category(self):
+        self.editor_mode = "create"
         self.selected_category_id = None
+        was_blocked = self.table.blockSignals(True)
         self.table.clearSelection()
+        self.table.blockSignals(was_blocked)
         self.name_input.clear()
         self.slug_input.clear()
         self.order_input.setValue(len(self.categories) + 1)
@@ -292,7 +299,7 @@ class Catagory_Tab(QWidget):
             "status": self.status_input.currentText(),
         }
 
-        if self.selected_category_id:
+        if self.editor_mode == "edit" and self.selected_category_id:
             category = self._category_by_id(self.selected_category_id)
             if category:
                 old_name = category["name"]
@@ -312,24 +319,31 @@ class Catagory_Tab(QWidget):
                 self.form_status.setText(status_text)
                 self._refresh_table()
                 self._refresh_assigned_products(name)
-        else:
-            if self.category_controller:
-                try:
-                    api_category = self.category_controller.create_category(name)
-                except ApiError as exc:
-                    QMessageBox.warning(self, "Category create failed", str(exc))
-                    return
-                payload.update(self._category_from_api(api_category, len(self.categories) + 1))
-                payload["slug"] = slug
-                payload["status"] = self.status_input.currentText()
             else:
-                payload["id"] = max(category["id"] for category in self.categories) + 1 if self.categories else 1
-            self.categories.append(payload)
-            self.product_map.setdefault(name, [])
-            status_text = "Category added to backend." if self.category_controller else "Category added locally."
-            self._refresh_table()
-            self._start_new_category()
-            self.form_status.setText(status_text)
+                self.editor_mode = "create"
+                self.selected_category_id = None
+                self._create_category(payload, name, slug)
+        else:
+            self._create_category(payload, name, slug)
+
+    def _create_category(self, payload, name, slug):
+        if self.category_controller:
+            try:
+                api_category = self.category_controller.create_category(name)
+            except ApiError as exc:
+                QMessageBox.warning(self, "Category create failed", str(exc))
+                return
+            payload.update(self._category_from_api(api_category, len(self.categories) + 1))
+            payload["slug"] = slug
+            payload["status"] = self.status_input.currentText()
+        else:
+            payload["id"] = max(category["id"] for category in self.categories) + 1 if self.categories else 1
+        self.categories.append(payload)
+        self.product_map.setdefault(name, [])
+        status_text = "Category added to backend." if self.category_controller else "Category added locally."
+        self._refresh_table()
+        self._start_new_category()
+        self.form_status.setText(status_text)
 
     def _delete_category(self):
         if not self.selected_category_id:
