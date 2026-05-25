@@ -310,6 +310,8 @@ class Catagory_Tab(QWidget):
                     self.product_map[name] = self.product_map.pop(old_name, [])
                 status_text = "Category changes saved to backend." if self.category_controller else "Category changes saved locally."
                 self.form_status.setText(status_text)
+                self._refresh_table()
+                self._refresh_assigned_products(name)
         else:
             if self.category_controller:
                 try:
@@ -324,12 +326,10 @@ class Catagory_Tab(QWidget):
                 payload["id"] = max(category["id"] for category in self.categories) + 1 if self.categories else 1
             self.categories.append(payload)
             self.product_map.setdefault(name, [])
-            self.selected_category_id = payload["id"]
             status_text = "Category added to backend." if self.category_controller else "Category added locally."
+            self._refresh_table()
+            self._start_new_category()
             self.form_status.setText(status_text)
-
-        self._refresh_table()
-        self._refresh_assigned_products(name)
 
     def _delete_category(self):
         if not self.selected_category_id:
