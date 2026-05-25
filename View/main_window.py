@@ -271,24 +271,25 @@ class Main_Window(QMainWindow):
         tab_font.setPointSize(11)
         tab_font.setBold(True)
         tabs.setFont(tab_font)
-        tabs.addTab(
-            Catagory_Tab(category_controller=self.category_controller, auth_model=self.auth_model),
-            "Categories",
+        self.category_tab = Catagory_Tab(
+            category_controller=self.category_controller,
+            auth_model=self.auth_model,
+            on_categories_changed=self._handle_categories_changed,
         )
-        tabs.addTab(
-            Product_Tab(
-                product_controller=self.product_controller,
-                category_controller=self.category_controller,
-                auth_model=self.auth_model,
-            ),
-            "Products",
+        self.product_tab = Product_Tab(
+            product_controller=self.product_controller,
+            category_controller=self.category_controller,
+            auth_model=self.auth_model,
         )
+        tabs.addTab(self.category_tab, "Categories")
+        tabs.addTab(self.product_tab, "Products")
         tabs.addTab(Order_Tab(), "Live Orders")
         tabs.addTab(
             Profile_Tab(auth_model=self.auth_model, on_account_deleted=self._handle_account_deleted),
             "Profile && QR",
         )
         tabs.addTab(Analytics_Tab(), "Analytics")
+        tabs.currentChanged.connect(self._handle_tab_changed)
 
         layout.addWidget(tabs, 1)
         return page
@@ -395,6 +396,15 @@ class Main_Window(QMainWindow):
             self.home_page.deleteLater()
             self.home_page = None
         self.stack.setCurrentWidget(self.login_page)
+
+    def _handle_categories_changed(self):
+        if hasattr(self, "product_tab"):
+            self.product_tab.mark_backend_dirty()
+
+    def _handle_tab_changed(self, index):
+        tabs = self.sender()
+        if tabs and hasattr(self, "product_tab") and tabs.widget(index) is self.product_tab:
+            self.product_tab.refresh_from_backend()
 
 
 if __name__ == "__main__":

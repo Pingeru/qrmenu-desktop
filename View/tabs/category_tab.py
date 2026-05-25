@@ -41,10 +41,11 @@ except ModuleNotFoundError:
 
 
 class Catagory_Tab(QWidget):
-    def __init__(self, category_controller=None, auth_model=None):
+    def __init__(self, category_controller=None, auth_model=None, on_categories_changed=None):
         super().__init__()
         self.category_controller = category_controller
         self.auth_model = auth_model
+        self.on_categories_changed = on_categories_changed
         if self.category_controller:
             self.categories = []
             self.product_map = {}
@@ -332,6 +333,7 @@ class Catagory_Tab(QWidget):
                 self.form_status.setText(status_text)
                 self._refresh_table()
                 self._refresh_assigned_products(name)
+                self._notify_categories_changed()
             else:
                 self._set_editor_mode("create")
                 self.selected_category_id = None
@@ -357,6 +359,7 @@ class Catagory_Tab(QWidget):
         self._refresh_table()
         self._start_new_category()
         self.form_status.setText(status_text)
+        self._notify_categories_changed()
 
     def _delete_category(self):
         if not self.selected_category_id:
@@ -383,6 +386,11 @@ class Catagory_Tab(QWidget):
         self.form_status.setText(f"Deleted {category['name']} {status_text}.")
         self._refresh_table()
         self._start_new_category()
+        self._notify_categories_changed()
+
+    def _notify_categories_changed(self):
+        if self.on_categories_changed:
+            self.on_categories_changed()
 
 
 Category_Tab = Catagory_Tab

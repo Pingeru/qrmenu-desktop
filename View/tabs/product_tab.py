@@ -52,6 +52,7 @@ class Product_Tab(QWidget):
         self.categories = []
         self.selected_product_id = None
         self.selected_image_path = None
+        self.backend_dirty = True
 
         root = QVBoxLayout(self)
         root.setContentsMargins(22, 22, 22, 22)
@@ -89,6 +90,13 @@ class Product_Tab(QWidget):
 
         self._set_controls_enabled()
         self._load_backend_data()
+
+    def mark_backend_dirty(self):
+        self.backend_dirty = True
+
+    def refresh_from_backend(self):
+        if self.backend_dirty:
+            self._load_backend_data()
 
     def _build_category_filter(self):
         card = make_card()
@@ -194,6 +202,7 @@ class Product_Tab(QWidget):
         if not self.product_controller or not self.category_controller:
             self.products = []
             self.categories = []
+            self.backend_dirty = False
             self.form_status.setText("Product endpoints are not connected in this app instance.")
             self._refresh_categories()
             self._refresh_table()
@@ -222,6 +231,7 @@ class Product_Tab(QWidget):
         self._refresh_categories()
         self._refresh_table()
         self._set_controls_enabled()
+        self.backend_dirty = False
 
         if load_errors:
             self.form_status.setText("Some product categories could not be loaded.")
