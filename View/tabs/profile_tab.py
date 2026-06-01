@@ -1,8 +1,11 @@
 
 from PyQt5.QtCore import QUrl, Qt
-from PyQt5.QtGui import QDesktopServices
+from PyQt5.QtGui import QDesktopServices, QPainter
+from PyQt5.QtPrintSupport import QPrintDialog, QPrinter
 from PyQt5.QtWidgets import (
     QApplication,
+    QDialog,
+    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -117,7 +120,8 @@ class Profile_Tab(QWidget):
         layout.addLayout(actions)
 
         self.profile_status = make_label(
-            "Business name, email, QR base URL, password, and account deletion are connected to qrmenu-api.",
+            "Business name, email, password, and account deletion are connected to qrmenu-api. "
+            "QR URL preview is local until the backend exposes a profile URL field.",
             "muted",
         )
         self.profile_status.setWordWrap(True)
@@ -134,7 +138,7 @@ class Profile_Tab(QWidget):
         layout.addWidget(make_label("QR Menu Preview", "section-title"))
         layout.addWidget(
             make_label(
-                "The API should return this unique URL; the desktop client displays it for preview and printing.",
+                "Enter the menu URL that the QR should encode, then save or print the generated QR.",
                 "subtitle",
             )
         )
@@ -156,9 +160,15 @@ class Profile_Tab(QWidget):
         actions = QHBoxLayout()
         copy_button = make_button("Copy URL")
         copy_button.clicked.connect(self._copy_url)
+        save_qr_button = make_button("Save PNG")
+        save_qr_button.clicked.connect(self._save_qr_png)
+        print_qr_button = make_button("Print QR")
+        print_qr_button.clicked.connect(self._print_qr)
         open_button = make_button("Preview Menu", "primary")
         open_button.clicked.connect(self._open_menu)
         actions.addWidget(copy_button)
+        actions.addWidget(save_qr_button)
+        actions.addWidget(print_qr_button)
         actions.addWidget(open_button)
         layout.addLayout(actions)
 
@@ -184,6 +194,9 @@ class Profile_Tab(QWidget):
         if hasattr(self, "qr_label"):
             self.qr_label.setPixmap(build_qr_pixmap(self.menu_url.text(), 188))
 
+    def _current_qr_pixmap(self, size=360):
+        return build_qr_pixmap(self.menu_url.text(), size)
+
     def _copy_url(self):
         QApplication.clipboard().setText(self.menu_url.text())
         self.qr_status.setText("Menu URL copied to clipboard.")
@@ -191,6 +204,48 @@ class Profile_Tab(QWidget):
     def _open_menu(self):
         QDesktopServices.openUrl(QUrl(self.menu_url.text()))
         self.qr_status.setText("Menu preview opened in the default browser.")
+
+    def _save_qr_png(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save QR PNG",
+            "qr-menu.png",
+            "PNG Images (*.png)",
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".png"):
+            path = f"{path}.png"
+        if self._current_qr_pixmap().save(path, "PNG"):
+            self.qr_status.setText(f"QR saved to {path}.")
+        else:
+            QMessageBox.warning(self, "QR save failed", "The QR PNG could not be saved.")
+
+    def _print_qr(self):
+        printer = QPrinter(QPrinter.HighResolution)
+        dialog = QPrintDialog(printer, self)
+        if dialog.exec_() != QDialog.Accepted:
+            return
+
+        pixmap = self._current_qr_pixmap(720)
+        painter = QPainter()
+        if not painter.begin(printer):
+            QMessageBox.warning(self, "QR print failed", "The printer could not be opened.")
+            return
+
+        viewport = painter.viewport()
+        scaled_size = pixmap.size()
+        scaled_size.scale(viewport.size(), Qt.KeepAspectRatio)
+        painter.setViewport(
+            viewport.x(),
+            viewport.y(),
+            scaled_size.width(),
+            scaled_size.height(),
+        )
+        painter.setWindow(pixmap.rect())
+        painter.drawPixmap(0, 0, pixmap)
+        painter.end()
+        self.qr_status.setText("QR sent to printer.")
 
     def _save_profile(self):
         if self.auth_model and self.auth_model.is_authenticated:
@@ -204,7 +259,6 @@ class Profile_Tab(QWidget):
                 fields = {
                     "name": self.business_name.text().strip(),
                     "email": self.email.text().strip(),
-                    "qr_base_url": self.menu_url.text().strip(),
                 }
                 if password:
                     fields["password"] = password

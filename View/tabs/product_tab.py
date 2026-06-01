@@ -216,15 +216,19 @@ class Product_Tab(QWidget):
             return
 
         self.categories = [self._category_from_api(category) for category in api_categories]
-        self.products = []
         load_errors = []
-        for category in self.categories:
-            try:
-                api_products = self.product_controller.load_products_by_category(category["id"])
-            except ApiError as exc:
-                load_errors.append(f"{category['name']}: {exc}")
-                continue
-            self.products.extend(self._product_from_api(product) for product in api_products)
+        try:
+            api_products = self.product_controller.load_products(business_id=self._business_id())
+            self.products = [self._product_from_api(product) for product in api_products]
+        except ApiError as exc:
+            self.products = []
+            load_errors.append(str(exc))
+
+        if load_errors:
+            load_errors = self._load_products_by_category_fallback()
+
+        for product in self.products:
+            product["category"] = self._category_name_by_id(product["category_id"])
 
         self.selected_product_id = None
         self.selected_image_path = None
@@ -246,6 +250,18 @@ class Product_Tab(QWidget):
             self.table.selectRow(0)
         else:
             self._start_new_product()
+
+    def _load_products_by_category_fallback(self):
+        self.products = []
+        load_errors = []
+        for category in self.categories:
+            try:
+                api_products = self.product_controller.load_products_by_category(category["id"])
+            except ApiError as exc:
+                load_errors.append(f"{category['name']}: {exc}")
+                continue
+            self.products.extend(self._product_from_api(product) for product in api_products)
+        return load_errors
 
     def _category_from_api(self, category):
         name = category.get("name") or "Unnamed category"

@@ -10,6 +10,13 @@ class ProductController:
     def load_products_by_category(self, category_id: str):
         return self.product_model.list_products_by_category(category_id)
 
+    def load_products(self, business_id: str | None = None, category_id: str | None = None, is_active: bool | None = None):
+        return self.product_model.list_products(
+            business_id=business_id,
+            category_id=category_id,
+            is_active=is_active,
+        )
+
     def get_product(self, product_id: str):
         return self.product_model.get_product(product_id)
 

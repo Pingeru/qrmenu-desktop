@@ -33,11 +33,8 @@ class AuthModel:
         name: str,
         email: str,
         password: str,
-        qr_base_url: str | None = None,
     ) -> dict[str, Any]:
         payload = {"name": name, "email": email, "password": password}
-        if qr_base_url:
-            payload["qr_base_url"] = qr_base_url
         response = self.api_client.post("/business/auth/register", payload, auth=False)
         self._store_auth_response(response)
         return self.business or {}

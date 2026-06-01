@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 from models.api_client import ApiClient, ApiError
 
@@ -14,6 +15,27 @@ class ProductModel:
 
     def list_products_by_category(self, category_id: str) -> list[dict[str, Any]]:
         response = self.api_client.get(f"/business/products/category/{category_id}", auth=False)
+        return response.get("products", [])
+
+    def list_products(
+        self,
+        *,
+        business_id: str | None = None,
+        category_id: str | None = None,
+        is_active: bool | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {}
+        if business_id:
+            params["business_id"] = business_id
+        if category_id:
+            params["category_id"] = category_id
+        if is_active is not None:
+            params["is_active"] = str(is_active).lower()
+
+        path = "/business/products"
+        if params:
+            path = f"{path}?{urlencode(params)}"
+        response = self.api_client.get(path, auth=False)
         return response.get("products", [])
 
     def get_product(self, product_id: str) -> dict[str, Any]:

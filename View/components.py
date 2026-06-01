@@ -14,18 +14,20 @@ from PyQt5.QtWidgets import (
 
 
 COLORS = {
-    "bg": "#f5f7fa",
+    "bg": "#eef3f1",
     "surface": "#ffffff",
-    "surface_alt": "#f9fbfc",
-    "border": "#dce3ea",
-    "text": "#14212b",
-    "muted": "#667585",
+    "surface_alt": "#f7faf9",
+    "border": "#d8e2df",
+    "text": "#17211d",
+    "muted": "#65736f",
     "accent": "#0f766e",
     "accent_dark": "#0b5f59",
     "amber": "#b7791f",
     "green": "#15803d",
     "red": "#b42318",
-    "blue": "#1d4ed8",
+    "blue": "#2563eb",
+    "coral": "#c2410c",
+    "ink": "#10231f",
 }
 
 
@@ -33,40 +35,107 @@ def app_stylesheet():
     return """
     * {
         font-family: "Segoe UI", Arial, sans-serif;
-        color: #14212b;
+        color: #17211d;
         font-size: 13px;
     }
 
     QWidget#LoginPage,
     QWidget#HomePage {
-        background: #f5f7fa;
+        background: #eef3f1;
     }
 
     QFrame#Card {
         background: #ffffff;
-        border: 1px solid #dce3ea;
+        border: 1px solid #d8e2df;
         border-radius: 8px;
     }
 
+    QFrame#AuthCard {
+        background: #ffffff;
+        border: 1px solid #d8e2df;
+        border-radius: 8px;
+    }
+
+    QLabel#AuthMark {
+        background: #10231f;
+        color: #e7fff8;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 800;
+    }
+
+    QLabel#AuthTitle {
+        color: #17211d;
+        font-size: 23px;
+        font-weight: 800;
+    }
+
+    QLabel#AuthSubtitle {
+        color: #65736f;
+        font-size: 13px;
+    }
+
+    QFrame#AuthCard QLineEdit {
+        min-width: 310px;
+    }
+
+    QFrame#AppHeader {
+        background: #10231f;
+        border: 1px solid #18342e;
+        border-radius: 8px;
+    }
+
+    QLabel#BrandMark {
+        background: #e7fff8;
+        color: #0b5f59;
+        border-radius: 16px;
+        font-size: 13px;
+        font-weight: 800;
+    }
+
+    QLabel#HeaderTitle {
+        color: #ffffff;
+        font-size: 20px;
+        font-weight: 800;
+    }
+
+    QLabel#HeaderSubtitle {
+        color: #a7bbb5;
+        font-size: 12px;
+    }
+
+    QFrame#AppHeader QPushButton[variant="ghost"] {
+        color: #e7fff8;
+        border-color: transparent;
+    }
+
+    QFrame#AppHeader QPushButton[variant="ghost"]:hover {
+        background: #18342e;
+    }
+
     QLabel[role="title"] {
-        color: #111827;
+        color: #17211d;
         font-size: 22px;
-        font-weight: 700;
+        font-weight: 800;
     }
 
     QLabel[role="subtitle"] {
-        color: #667585;
+        color: #65736f;
         font-size: 13px;
     }
 
     QLabel[role="section-title"] {
-        color: #14212b;
+        color: #17211d;
         font-size: 16px;
-        font-weight: 700;
+        font-weight: 800;
     }
 
     QLabel[role="muted"] {
-        color: #667585;
+        color: #65736f;
+    }
+
+    QWidget#SectionHeader {
+        background: transparent;
     }
 
     QLineEdit,
@@ -75,7 +144,7 @@ def app_stylesheet():
     QSpinBox,
     QDoubleSpinBox {
         background: #ffffff;
-        border: 1px solid #cfd8e3;
+        border: 1px solid #cbd8d4;
         border-radius: 6px;
         padding: 8px 10px;
         selection-background-color: #0f766e;
@@ -92,19 +161,21 @@ def app_stylesheet():
     QSpinBox:focus,
     QDoubleSpinBox:focus {
         border: 1px solid #0f766e;
+        background: #fbfefd;
     }
 
     QPushButton {
-        border: 1px solid #cfd8e3;
+        border: 1px solid #cbd8d4;
         border-radius: 6px;
         padding: 8px 14px;
         background: #ffffff;
-        color: #14212b;
-        font-weight: 600;
+        color: #17211d;
+        font-weight: 700;
+        min-height: 20px;
     }
 
     QPushButton:hover {
-        background: #f2f6f8;
+        background: #f3f8f6;
     }
 
     QPushButton[variant="primary"] {
@@ -120,29 +191,33 @@ def app_stylesheet():
 
     QPushButton[variant="danger"] {
         color: #b42318;
-        border-color: #f1b7b1;
-        background: #fff7f6;
+        border-color: #efc0ba;
+        background: #fff8f7;
     }
 
     QPushButton[variant="ghost"] {
         background: transparent;
         border-color: transparent;
         color: #0f766e;
-        padding-left: 8px;
-        padding-right: 8px;
+    }
+
+    QPushButton:disabled {
+        color: #9aa8a4;
+        border-color: #dde6e3;
+        background: #f4f7f6;
     }
 
     QTabWidget::pane {
-        border: 1px solid #dce3ea;
+        border: 1px solid #d8e2df;
         background: #ffffff;
         border-radius: 8px;
         top: -1px;
     }
 
     QTabBar::tab {
-        background: #edf2f5;
-        color: #526170;
-        border: 1px solid #dce3ea;
+        background: #e5ece9;
+        color: #586964;
+        border: 1px solid #d8e2df;
         border-bottom: none;
         border-top-left-radius: 7px;
         border-top-right-radius: 7px;
@@ -154,11 +229,17 @@ def app_stylesheet():
     QTabBar::tab:selected {
         background: #ffffff;
         color: #0f766e;
+        border-top: 2px solid #0f766e;
+    }
+
+    QTabBar::tab:hover:!selected {
+        background: #f1f6f4;
+        color: #17211d;
     }
 
     QListWidget {
         background: #ffffff;
-        border: 1px solid #dce3ea;
+        border: 1px solid #d8e2df;
         border-radius: 8px;
         padding: 6px;
     }
@@ -176,31 +257,31 @@ def app_stylesheet():
 
     QTableWidget {
         background: #ffffff;
-        border: 1px solid #dce3ea;
+        border: 1px solid #d8e2df;
         border-radius: 8px;
-        gridline-color: #edf1f4;
+        gridline-color: #eef3f1;
         selection-background-color: #e4f3f0;
-        selection-color: #14212b;
-        alternate-background-color: #f9fbfc;
+        selection-color: #17211d;
+        alternate-background-color: #f7faf9;
     }
 
     QHeaderView::section {
-        background: #f3f6f8;
-        color: #526170;
+        background: #eef4f2;
+        color: #586964;
         border: none;
-        border-bottom: 1px solid #dce3ea;
+        border-bottom: 1px solid #d8e2df;
         padding: 9px 10px;
         font-weight: 700;
     }
 
     QScrollBar:vertical {
-        background: #f5f7fa;
+        background: #eef3f1;
         width: 10px;
         margin: 2px;
     }
 
     QScrollBar::handle:vertical {
-        background: #c7d2de;
+        background: #bdcbc7;
         border-radius: 5px;
         min-height: 32px;
     }
@@ -229,12 +310,14 @@ def make_label(text, role=None):
 
 def make_badge(text, tone="neutral"):
     colors = {
-        "neutral": ("#eef2f6", "#526170"),
+        "neutral": ("#eef4f2", "#586964"),
         "accent": ("#e4f3f0", "#0f766e"),
         "amber": ("#fff4df", "#996515"),
         "green": ("#e8f5ec", "#15803d"),
         "red": ("#fff0ee", "#b42318"),
-        "blue": ("#eaf1ff", "#1d4ed8"),
+        "blue": ("#eaf1ff", "#2563eb"),
+        "coral": ("#fff1e8", "#c2410c"),
+        "dark": ("#18342e", "#e7fff8"),
     }
     background, color = colors.get(tone, colors["neutral"])
     label = QLabel(text)
@@ -253,8 +336,15 @@ class StatCard(QFrame):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 14, 16, 14)
-        layout.setSpacing(6)
+        layout.setContentsMargins(16, 12, 16, 14)
+        layout.setSpacing(7)
+
+        accent_bar = QFrame()
+        accent_bar.setFixedHeight(3)
+        accent_bar.setStyleSheet(
+            f"background: {COLORS.get(tone, COLORS['accent'])}; border-radius: 1px;"
+        )
+        layout.addWidget(accent_bar)
 
         title_label = make_label(title, "muted")
         self.value_label = QLabel(value)
@@ -273,12 +363,13 @@ class StatCard(QFrame):
 class SectionHeader(QWidget):
     def __init__(self, title, subtitle="", actions=None):
         super().__init__()
+        self.setObjectName("SectionHeader")
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
+        layout.setSpacing(14)
 
         text_group = QVBoxLayout()
-        text_group.setSpacing(3)
+        text_group.setSpacing(4)
         text_group.addWidget(make_label(title, "section-title"))
         if subtitle:
             text_group.addWidget(make_label(subtitle, "subtitle"))
