@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QTableWidget,
     QVBoxLayout,
@@ -285,6 +286,11 @@ def app_stylesheet():
         border-radius: 5px;
         min-height: 32px;
     }
+
+    QScrollArea {
+        border: none;
+        background: transparent;
+    }
     """
 
 
@@ -292,6 +298,14 @@ def make_card(object_name="Card"):
     card = QFrame()
     card.setObjectName(object_name)
     return card
+
+
+def make_scroll_area(widget):
+    scroll_area = QScrollArea()
+    scroll_area.setWidgetResizable(True)
+    scroll_area.setFrameShape(QFrame.NoFrame)
+    scroll_area.setWidget(widget)
+    return scroll_area
 
 
 def make_button(text, variant="default"):

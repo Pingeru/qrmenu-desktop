@@ -9,7 +9,9 @@ from PyQt5.QtWidgets import (
     QListWidget,
     QMessageBox,
     QAbstractItemView,
+    QSizePolicy,
     QSpinBox,
+    QSplitter,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -22,28 +24,35 @@ try:
     from view.components import (
         SectionHeader,
         StatCard,
-        make_badge,
         make_button,
         make_card,
         make_label,
+        make_scroll_area,
         set_table_defaults,
     )
 except ModuleNotFoundError:
     from components import (
         SectionHeader,
         StatCard,
-        make_badge,
         make_button,
         make_card,
         make_label,
+        make_scroll_area,
         set_table_defaults,
     )
 
 
 class Catagory_Tab(QWidget):
-    def __init__(self, category_controller=None, auth_model=None, on_categories_changed=None):
+    def __init__(
+        self,
+        category_controller=None,
+        product_controller=None,
+        auth_model=None,
+        on_categories_changed=None,
+    ):
         super().__init__()
         self.category_controller = category_controller
+        self.product_controller = product_controller
         self.auth_model = auth_model
         self.on_categories_changed = on_categories_changed
         if self.category_controller:
@@ -65,9 +74,13 @@ class Catagory_Tab(QWidget):
         self.selected_category_id = None
         self.editor_mode = "create"
 
-        root = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        body = QWidget()
+        root = QVBoxLayout(body)
         root.setContentsMargins(22, 22, 22, 22)
         root.setSpacing(18)
+        outer.addWidget(make_scroll_area(body), 1)
 
         add_button = make_button("Add Category", "primary")
         add_button.clicked.connect(self._start_new_category)
@@ -91,11 +104,12 @@ class Catagory_Tab(QWidget):
         summary.addWidget(self.assigned_card)
         root.addLayout(summary)
 
-        content = QHBoxLayout()
-        content.setSpacing(16)
-        content.addWidget(self._build_table(), 3)
-        content.addWidget(self._build_editor(), 2)
-        root.addLayout(content, 1)
+        content = QSplitter(Qt.Horizontal)
+        content.setChildrenCollapsible(False)
+        content.addWidget(self._build_table())
+        content.addWidget(self._build_editor())
+        content.setSizes([720, 420])
+        root.addWidget(content, 1)
 
         if self.category_controller:
             self._load_categories()
@@ -106,6 +120,10 @@ class Catagory_Tab(QWidget):
             else:
                 self._start_new_category()
 
+    def refresh_from_backend(self):
+        if self.category_controller:
+            self._load_categories()
+
     def _build_table(self):
         card = make_card()
         layout = QVBoxLayout(card)
@@ -115,7 +133,6 @@ class Catagory_Tab(QWidget):
         toolbar = QHBoxLayout()
         toolbar.addWidget(make_label("Menu Categories", "section-title"))
         toolbar.addStretch(1)
-        toolbar.addWidget(make_badge("CRUD endpoints", "accent"))
         layout.addLayout(toolbar)
 
         self.table = QTableWidget(0, 5)
@@ -128,6 +145,7 @@ class Catagory_Tab(QWidget):
 
     def _build_editor(self):
         card = make_card()
+        card.setMinimumWidth(280)
         layout = QVBoxLayout(card)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(14)
@@ -135,6 +153,9 @@ class Catagory_Tab(QWidget):
         layout.addWidget(make_label("Category Details", "section-title"))
 
         form = QFormLayout()
+        form.setLabelAlignment(Qt.AlignLeft)
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        form.setRowWrapPolicy(QFormLayout.WrapLongRows)
         form.setHorizontalSpacing(12)
         form.setVerticalSpacing(10)
 
@@ -146,6 +167,9 @@ class Catagory_Tab(QWidget):
         self.order_input.setRange(1, 99)
         self.status_input = QComboBox()
         self.status_input.addItems(["Visible", "Hidden"])
+        for field in [self.name_input, self.slug_input, self.order_input, self.status_input]:
+            field.setMinimumWidth(0)
+            field.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         form.addRow("Name", self.name_input)
         form.addRow("Slug", self.slug_input)
@@ -155,6 +179,7 @@ class Catagory_Tab(QWidget):
 
         layout.addWidget(make_label("Assigned Products", "section-title"))
         self.assigned_products = QListWidget()
+        self.assigned_products.setMinimumHeight(96)
         layout.addWidget(self.assigned_products, 1)
 
         actions = QHBoxLayout()
@@ -166,10 +191,10 @@ class Catagory_Tab(QWidget):
         actions.addWidget(self.delete_button)
         layout.addLayout(actions)
 
-        self.form_status = make_label("Select a category or create a new one.", "muted")
+        self.form_status = make_label("", "muted")
         self.form_status.setWordWrap(True)
         layout.addWidget(self.form_status)
-        return card
+        return make_scroll_area(card)
 
     def _load_categories(self):
         if not self.category_controller:
@@ -182,20 +207,16 @@ class Catagory_Tab(QWidget):
             self.form_status.setText(f"Backend sync failed: {exc}")
             return
 
-        previous_product_map = self.product_map
         self.categories = [
             self._category_from_api(category, index + 1)
             for index, category in enumerate(api_categories)
         ]
-        self.product_map = {
-            category["name"]: previous_product_map.get(category["name"], [])
-            for category in self.categories
-        }
+        self._load_product_assignments()
         self.selected_category_id = None
         self._refresh_table()
         if self.table.rowCount():
             self.table.selectRow(0)
-            self.form_status.setText("Categories loaded from backend.")
+            self.form_status.setText("")
         else:
             self._start_new_category()
             self.form_status.setText("No categories found on backend.")
@@ -215,6 +236,64 @@ class Catagory_Tab(QWidget):
             "business_id": category.get("business_id"),
             "created_at": category.get("created_at"),
         }
+
+    def _load_product_assignments(self):
+        self.product_map = {category["name"]: [] for category in self.categories}
+        if not self.product_controller or not self.categories:
+            return
+
+        try:
+            products = self.product_controller.load_products(business_id=self._business_id())
+        except ApiError:
+            products = self._load_products_by_category_fallback()
+
+        category_by_id = {str(category["id"]): category["name"] for category in self.categories}
+        category_by_name = {category["name"]: category["name"] for category in self.categories}
+        for product in products:
+            category_name = self._product_category_name(product, category_by_id, category_by_name)
+            if not category_name:
+                continue
+            self.product_map.setdefault(category_name, []).append(self._product_name(product))
+
+    def _load_products_by_category_fallback(self):
+        products = []
+        for category in self.categories:
+            try:
+                for product in self.product_controller.load_products_by_category(category["id"]):
+                    product["_category_fallback_id"] = category["id"]
+                    products.append(product)
+            except ApiError:
+                continue
+        return products
+
+    def _product_category_name(self, product, category_by_id, category_by_name):
+        category_id = product.get("category_id") or product.get("_category_fallback_id")
+        if isinstance(category_id, dict):
+            category_id = category_id.get("_id") or category_id.get("id")
+        if category_id is not None:
+            category_name = category_by_id.get(str(category_id))
+            if category_name:
+                return category_name
+
+        category = product.get("category")
+        if isinstance(category, dict):
+            category_id = category.get("_id") or category.get("id")
+            if category_id is not None:
+                category_name = category_by_id.get(str(category_id))
+                if category_name:
+                    return category_name
+            category_name = category.get("name")
+            return category_by_name.get(category_name)
+        if isinstance(category, str):
+            return category_by_name.get(category)
+        return None
+
+    def _product_name(self, product):
+        name = (product.get("name") or "").strip()
+        if name:
+            return name
+        product_id = str(product.get("_id") or product.get("id") or "")
+        return f"Product {product_id[-6:]}" if product_id else "Unnamed product"
 
     def _slug_for(self, value):
         return value.strip().lower().replace(" ", "-")

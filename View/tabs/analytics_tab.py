@@ -23,6 +23,7 @@ try:
         make_button,
         make_card,
         make_label,
+        make_scroll_area,
         set_table_defaults,
     )
 except ModuleNotFoundError:
@@ -34,6 +35,7 @@ except ModuleNotFoundError:
         make_button,
         make_card,
         make_label,
+        make_scroll_area,
         set_table_defaults,
     )
 
@@ -95,9 +97,13 @@ class Analytics_Tab(QWidget):
         self.analytics_controller = analytics_controller
         self.order_controller = order_controller
 
-        root = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        body = QWidget()
+        root = QVBoxLayout(body)
         root.setContentsMargins(22, 22, 22, 22)
         root.setSpacing(18)
+        outer.addWidget(make_scroll_area(body), 1)
 
         self.period_filter = QComboBox()
         self.period_filter.addItem("Current month")
@@ -107,7 +113,7 @@ class Analytics_Tab(QWidget):
         root.addWidget(
             SectionHeader(
                 "Statistics Panel",
-                "Revenue, order volume, and product rankings from GET /business/analytics.",
+                "",
                 [make_label("Period", "muted"), self.period_filter, refresh_button],
             )
         )
@@ -124,7 +130,9 @@ class Analytics_Tab(QWidget):
         summary.addWidget(self.top_card)
         root.addLayout(summary)
 
-        dashboard = QGridLayout()
+        dashboard_widget = QWidget()
+        dashboard_widget.setMinimumHeight(560)
+        dashboard = QGridLayout(dashboard_widget)
         dashboard.setSpacing(16)
         dashboard.addWidget(self._build_revenue_chart(), 0, 0)
         dashboard.addWidget(self._build_quantity_chart(), 0, 1)
@@ -134,7 +142,7 @@ class Analytics_Tab(QWidget):
         dashboard.setRowStretch(1, 1)
         dashboard.setColumnStretch(0, 3)
         dashboard.setColumnStretch(1, 2)
-        root.addLayout(dashboard, 1)
+        root.addWidget(make_scroll_area(dashboard_widget), 1)
 
         self._load_analytics(show_error=False)
 
@@ -207,20 +215,7 @@ class Analytics_Tab(QWidget):
         self.insight_body.setWordWrap(True)
         layout.addWidget(self.insight_body)
 
-        layout.addWidget(make_label("Backend coverage", "section-title"))
-        for text in [
-            "Totals: orders, revenue, average order, total sold items.",
-            "Rankings: top and least sold products.",
-            "Categories: top and least sold category performance.",
-        ]:
-            row = QHBoxLayout()
-            row.addWidget(make_badge("Live", "green"))
-            label = make_label(text, "muted")
-            label.setWordWrap(True)
-            row.addWidget(label, 1)
-            layout.addLayout(row)
-
-        self.sync_status = make_label("Waiting for business analytics data from qrmenu-api.", "muted")
+        self.sync_status = make_label("", "muted")
         self.sync_status.setWordWrap(True)
         layout.addStretch(1)
         layout.addWidget(self.sync_status)
@@ -365,7 +360,7 @@ class Analytics_Tab(QWidget):
         if fallback_reason:
             self.sync_status.setText(f"Using order fallback because analytics failed: {fallback_reason}")
         else:
-            self.sync_status.setText("Loaded from GET /business/analytics.")
+            self.sync_status.setText("")
 
     def _product_entries_from_orders(self, orders):
         products = {}

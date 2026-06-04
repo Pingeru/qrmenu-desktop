@@ -26,12 +26,14 @@ from controllers.analytics_controller import AnalyticsController
 from controllers.category_controller import CategoryController
 from controllers.order_controller import OrderController
 from controllers.product_controller import ProductController
+from controllers.qr_controller import QrController
 from models.api_client import ApiClient, ApiError
 from models.analytics_model import AnalyticsModel
 from models.auth_model import AuthModel
 from models.category_model import CategoryModel
 from models.order_model import OrderModel
 from models.product_model import ProductModel
+from models.qr_model import QrModel
 from utils.config import API_BASE_URL
 
 try:
@@ -65,6 +67,7 @@ class Main_Window(QMainWindow):
         self.category_controller = CategoryController(CategoryModel(self.api_client))
         self.order_controller = OrderController(OrderModel(self.api_client))
         self.product_controller = ProductController(ProductModel(self.api_client))
+        self.qr_controller = QrController(QrModel(self.api_client))
 
         self.stack = QStackedWidget()
         self.login_page = self._create_login_page()
@@ -103,10 +106,6 @@ class Main_Window(QMainWindow):
         title_font.setBold(True)
         title.setFont(title_font)
 
-        subtitle = QLabel("Manage menu categories, products, and QR settings.")
-        subtitle.setObjectName("AuthSubtitle")
-        subtitle.setAlignment(Qt.AlignCenter)
-
         label_font = QFont()
         label_font.setPointSize(11)
 
@@ -134,7 +133,6 @@ class Main_Window(QMainWindow):
 
         form_layout.addWidget(brand_mark, 0, 0, 1, 2, Qt.AlignCenter)
         form_layout.addWidget(title, 1, 0, 1, 2)
-        form_layout.addWidget(subtitle, 2, 0, 1, 2)
         form_layout.addWidget(email_label, 3, 0)
         form_layout.addWidget(self.email_input, 3, 1)
         form_layout.addWidget(password_label, 4, 0)
@@ -282,6 +280,7 @@ class Main_Window(QMainWindow):
         tabs.setFont(tab_font)
         self.category_tab = Catagory_Tab(
             category_controller=self.category_controller,
+            product_controller=self.product_controller,
             auth_model=self.auth_model,
             on_categories_changed=self._handle_categories_changed,
         )
@@ -294,7 +293,11 @@ class Main_Window(QMainWindow):
         tabs.addTab(self.product_tab, "Products")
         tabs.addTab(Order_Tab(order_controller=self.order_controller), "Live Orders")
         tabs.addTab(
-            Profile_Tab(auth_model=self.auth_model, on_account_deleted=self._handle_account_deleted),
+            Profile_Tab(
+                auth_model=self.auth_model,
+                qr_controller=self.qr_controller,
+                on_account_deleted=self._handle_account_deleted,
+            ),
             "Profile && QR",
         )
         tabs.addTab(
@@ -395,6 +398,8 @@ class Main_Window(QMainWindow):
         tabs = self.sender()
         if tabs and hasattr(self, "product_tab") and tabs.widget(index) is self.product_tab:
             self.product_tab.refresh_from_backend()
+        elif tabs and hasattr(self, "category_tab") and tabs.widget(index) is self.category_tab:
+            self.category_tab.refresh_from_backend()
 
 
 if __name__ == "__main__":

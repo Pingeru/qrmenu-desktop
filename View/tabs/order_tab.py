@@ -70,7 +70,7 @@ class Order_Tab(QWidget):
         root.addWidget(
             SectionHeader(
                 "Live Order Queue",
-                "Live orders are loaded from GET /business/orders and can be updated or deleted here.",
+                "",
                 [refresh_button],
             )
         )
@@ -167,7 +167,7 @@ class Order_Tab(QWidget):
         delete_actions.addStretch(1)
         layout.addLayout(delete_actions)
 
-        self.detail_status = make_label("Select an order to update its backend status.", "muted")
+        self.detail_status = make_label("", "muted")
         self.detail_status.setWordWrap(True)
         layout.addWidget(self.detail_status)
         return card
@@ -303,7 +303,7 @@ class Order_Tab(QWidget):
             self.order_meta.setText("No business orders returned from the backend for this filter.")
             self._set_status_badge("No status")
             self.item_list.clear()
-            self.detail_status.setText("Live order data will appear after GET /business/orders returns rows.")
+            self.detail_status.setText("")
             self._refresh_action_state()
 
     def _refresh_summary(self):
@@ -335,7 +335,7 @@ class Order_Tab(QWidget):
                 self.item_list.addItem(item)
         else:
             self.item_list.addItem("No item details returned.")
-        self.detail_status.setText("Order loaded from qrmenu-api.")
+        self.detail_status.setText("")
         self._refresh_action_state()
 
     def _set_status_badge(self, status):

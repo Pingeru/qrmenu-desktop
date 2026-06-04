@@ -37,6 +37,13 @@ class ApiClient:
     def get(self, path: str, *, auth: bool = True) -> dict[str, Any]:
         return self.request("GET", path, auth=auth)
 
+    def get_bytes(self, path: str, *, auth: bool = True) -> bytes:
+        response = self._request_response("GET", path, auth=auth)
+        if response.status_code >= 400:
+            payload = self._payload_from_response(response)
+            self._raise_api_error(response, payload)
+        return response.content
+
     def post(self, path: str, payload: dict[str, Any] | None = None, *, auth: bool = True) -> dict[str, Any]:
         return self.request("POST", path, json_payload=payload, auth=auth)
 
@@ -76,6 +83,30 @@ class ApiClient:
         files: dict[str, Any] | None = None,
         auth: bool = True,
     ) -> dict[str, Any]:
+        response = self._request_response(
+            method,
+            path,
+            json_payload=json_payload,
+            data_payload=data_payload,
+            files=files,
+            auth=auth,
+        )
+        payload = self._payload_from_response(response)
+        if response.status_code >= 400:
+            self._raise_api_error(response, payload)
+
+        return payload if isinstance(payload, dict) else {"data": payload}
+
+    def _request_response(
+        self,
+        method: str,
+        path: str,
+        *,
+        json_payload: dict[str, Any] | None = None,
+        data_payload: dict[str, Any] | None = None,
+        files: dict[str, Any] | None = None,
+        auth: bool = True,
+    ) -> requests.Response:
         url = f"{self.base_url}/{path.lstrip('/')}"
         headers = {"Accept": "application/json"}
         if json_payload is not None:
@@ -117,18 +148,20 @@ class ApiClient:
                 except requests.RequestException as exc:
                     raise ApiError(f"Backend request failed: {exc}") from exc
 
+        return response
+
+    def _payload_from_response(self, response: requests.Response) -> Any:
         payload: Any = {}
         if response.content:
             try:
                 payload = response.json()
             except ValueError:
                 payload = {"raw": response.text}
+        return payload
 
-        if response.status_code >= 400:
-            message = payload.get("error") if isinstance(payload, dict) else None
-            raise ApiError(message or f"Backend returned HTTP {response.status_code}", response.status_code, payload)
-
-        return payload if isinstance(payload, dict) else {"data": payload}
+    def _raise_api_error(self, response: requests.Response, payload: Any):
+        message = payload.get("error") if isinstance(payload, dict) else None
+        raise ApiError(message or f"Backend returned HTTP {response.status_code}", response.status_code, payload)
 
     def _rewind_files(self, files: dict[str, Any] | None):
         if not files:

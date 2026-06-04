@@ -1,4 +1,9 @@
+from pathlib import Path
+from urllib.parse import urljoin, urlparse
+
+import requests
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
     QFileDialog,
     QComboBox,
@@ -10,6 +15,8 @@ from PyQt5.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMessageBox,
+    QHeaderView,
+    QSizePolicy,
     QSplitter,
     QTableWidget,
     QTableWidgetItem,
@@ -19,6 +26,7 @@ from PyQt5.QtWidgets import (
 )
 
 from models.api_client import ApiError
+from utils.config import API_BASE_URL
 
 try:
     from view.components import (
@@ -28,6 +36,7 @@ try:
         make_button,
         make_card,
         make_label,
+        make_scroll_area,
         set_table_defaults,
     )
 except ModuleNotFoundError:
@@ -38,6 +47,7 @@ except ModuleNotFoundError:
         make_button,
         make_card,
         make_label,
+        make_scroll_area,
         set_table_defaults,
     )
 
@@ -52,11 +62,16 @@ class Product_Tab(QWidget):
         self.categories = []
         self.selected_product_id = None
         self.selected_image_path = None
+        self.image_cache = {}
         self.backend_dirty = True
 
-        root = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        body = QWidget()
+        root = QVBoxLayout(body)
         root.setContentsMargins(22, 22, 22, 22)
         root.setSpacing(18)
+        outer.addWidget(make_scroll_area(body), 1)
 
         self.add_button = make_button("Add Product", "primary")
         self.add_button.clicked.connect(self._start_new_product)
@@ -131,12 +146,22 @@ class Product_Tab(QWidget):
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(["Product", "Category", "Price", "Status", "Image"])
         set_table_defaults(self.table)
+        self.table.verticalHeader().setDefaultSectionSize(74)
+        header = self.table.horizontalHeader()
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.Fixed)
+        self.table.setColumnWidth(4, 92)
         self.table.itemSelectionChanged.connect(self._load_selected_product)
         layout.addWidget(self.table, 1)
         return card
 
     def _build_editor(self):
         card = make_card()
+        card.setMinimumWidth(300)
         layout = QVBoxLayout(card)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(14)
@@ -146,6 +171,8 @@ class Product_Tab(QWidget):
         form = QFormLayout()
         form.setLabelAlignment(Qt.AlignLeft)
         form.setFormAlignment(Qt.AlignTop)
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        form.setRowWrapPolicy(QFormLayout.WrapLongRows)
         form.setHorizontalSpacing(12)
         form.setVerticalSpacing(10)
 
@@ -160,7 +187,17 @@ class Product_Tab(QWidget):
         self.status_input.addItems(["Visible", "Hidden"])
         self.description_input = QTextEdit()
         self.description_input.setPlaceholderText("Short customer-facing description")
-        self.description_input.setFixedHeight(92)
+        self.description_input.setMinimumHeight(72)
+        self.description_input.setMaximumHeight(130)
+        for field in [
+            self.name_input,
+            self.category_input,
+            self.price_input,
+            self.status_input,
+            self.description_input,
+        ]:
+            field.setMinimumWidth(0)
+            field.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         form.addRow("Name", self.name_input)
         form.addRow("Category", self.category_input)
@@ -174,11 +211,19 @@ class Product_Tab(QWidget):
         image_layout.setContentsMargins(12, 12, 12, 12)
         image_layout.setSpacing(8)
         image_layout.addWidget(make_label("Product Image", "muted"))
+        self.image_preview = QLabel("No image")
+        self.image_preview.setAlignment(Qt.AlignCenter)
+        self.image_preview.setMinimumHeight(132)
+        self.image_preview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.image_preview.setStyleSheet(
+            "background: #f7faf9; border: 1px solid #d8e2df; border-radius: 6px; color: #65736f;"
+        )
         self.image_label = QLabel("No image selected")
         self.image_label.setWordWrap(True)
         self.image_label.setStyleSheet("color: #667585;")
         self.upload_button = make_button("Upload Image")
         self.upload_button.clicked.connect(self._choose_image)
+        image_layout.addWidget(self.image_preview)
         image_layout.addWidget(self.image_label)
         image_layout.addWidget(self.upload_button)
         layout.addWidget(image_card)
@@ -192,11 +237,11 @@ class Product_Tab(QWidget):
         actions.addWidget(self.delete_button)
         layout.addLayout(actions)
 
-        self.form_status = make_label("Products are loaded from qrmenu-api.", "muted")
+        self.form_status = make_label("", "muted")
         self.form_status.setWordWrap(True)
         layout.addWidget(self.form_status)
         layout.addStretch(1)
-        return card
+        return make_scroll_area(card)
 
     def _load_backend_data(self):
         if not self.product_controller or not self.category_controller:
@@ -244,7 +289,7 @@ class Product_Tab(QWidget):
         elif not self.products:
             self.form_status.setText("No products found on backend.")
         else:
-            self.form_status.setText("Products loaded from backend.")
+            self.form_status.setText("")
 
         if self.table.rowCount():
             self.table.selectRow(0)
@@ -276,7 +321,12 @@ class Product_Tab(QWidget):
 
     def _product_from_api(self, product):
         category_id = product.get("category_id")
-        image_path = product.get("image_path")
+        image_path = (
+            product.get("image_path")
+            or product.get("image_url")
+            or product.get("image")
+            or product.get("photo_url")
+        )
         return {
             "id": product.get("_id") or product.get("id"),
             "name": product.get("name") or "",
@@ -286,13 +336,108 @@ class Product_Tab(QWidget):
             "status": "Visible" if product.get("is_active", True) else "Hidden",
             "is_active": bool(product.get("is_active", True)),
             "description": product.get("description") or "",
-            "image": image_path or "No image",
+            "image": self._image_display_text(image_path),
             "image_path": image_path,
         }
 
     def _category_name_by_id(self, category_id):
         category = next((item for item in self.categories if item["id"] == category_id), None)
         return category["name"] if category else "Unknown category"
+
+    def _image_display_text(self, image_path):
+        if not image_path:
+            return "No image"
+        path_text = str(image_path)
+        parsed = urlparse(path_text)
+        if parsed.scheme in {"http", "https"}:
+            return Path(parsed.path).name or path_text
+        path_obj = Path(path_text)
+        return path_obj.name or path_text
+
+    def _api_base_url(self):
+        product_model = getattr(self.product_controller, "product_model", None)
+        api_client = getattr(product_model, "api_client", None)
+        return getattr(api_client, "base_url", API_BASE_URL).rstrip("/")
+
+    def _image_url_candidates(self, image_path):
+        path_text = str(image_path or "").strip()
+        if not path_text:
+            return []
+
+        parsed = urlparse(path_text)
+        if parsed.scheme in {"http", "https"}:
+            return [path_text]
+
+        api_base = self._api_base_url()
+        api_parts = urlparse(api_base)
+        if not api_parts.scheme or not api_parts.netloc:
+            return []
+
+        origin = f"{api_parts.scheme}://{api_parts.netloc}"
+        normalized = path_text.lstrip("/")
+        candidates = [
+            urljoin(f"{origin}/", normalized),
+            urljoin(f"{api_base}/", normalized),
+        ]
+        return list(dict.fromkeys(candidates))
+
+    def _is_local_image_path(self, image_path):
+        path_text = str(image_path or "").strip()
+        if not path_text:
+            return False
+        if urlparse(path_text).scheme in {"http", "https"}:
+            return False
+        return Path(path_text).is_file()
+
+    def _pixmap_for_image_path(self, image_path, width=140, height=100):
+        path_text = str(image_path or "").strip()
+        if not path_text:
+            return QPixmap()
+
+        cache_key = (path_text, width, height)
+        if cache_key in self.image_cache:
+            return self.image_cache[cache_key]
+
+        pixmap = QPixmap()
+        local_path = Path(path_text)
+        if local_path.is_file():
+            pixmap.load(str(local_path))
+        else:
+            for url in self._image_url_candidates(path_text):
+                try:
+                    response = requests.get(url, timeout=3)
+                except requests.RequestException:
+                    continue
+                if response.status_code >= 400:
+                    continue
+                if pixmap.loadFromData(response.content):
+                    break
+
+        if not pixmap.isNull():
+            pixmap = pixmap.scaled(width, height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.image_cache[cache_key] = pixmap
+        return pixmap
+
+    def _build_table_image_cell(self, image_path):
+        preview = QLabel("-")
+        preview.setAlignment(Qt.AlignCenter)
+        preview.setMinimumHeight(64)
+        preview.setStyleSheet("color: #65736f;")
+        pixmap = self._pixmap_for_image_path(image_path, 76, 58)
+        if not pixmap.isNull():
+            preview.setPixmap(pixmap)
+            preview.setToolTip(self._image_display_text(image_path))
+        return preview
+
+    def _set_image_preview(self, image_path):
+        self.image_label.setText(self._image_display_text(image_path))
+        pixmap = self._pixmap_for_image_path(image_path, 230, 132)
+        if pixmap.isNull():
+            self.image_preview.clear()
+            self.image_preview.setText("No image")
+            return
+        self.image_preview.setText("")
+        self.image_preview.setPixmap(pixmap)
 
     def _refresh_categories(self):
         selected = self.category_list.currentItem().text() if self.category_list.currentItem() else None
@@ -347,7 +492,8 @@ class Product_Tab(QWidget):
             self.table.setItem(row, 1, QTableWidgetItem(product["category"]))
             self.table.setItem(row, 2, QTableWidgetItem(f"$ {product['price']:.2f}"))
             self.table.setItem(row, 3, QTableWidgetItem(product["status"]))
-            self.table.setItem(row, 4, QTableWidgetItem(product["image"]))
+            self.table.setItem(row, 4, QTableWidgetItem(""))
+            self.table.setCellWidget(row, 4, self._build_table_image_cell(product["image_path"]))
 
         total = len(self.products)
         visible = sum(1 for product in self.products if product["status"] == "Visible")
@@ -365,13 +511,13 @@ class Product_Tab(QWidget):
         if not product:
             return
         self.selected_product_id = product_id
-        self.selected_image_path = product["image_path"]
+        self.selected_image_path = product["image_path"] if self._is_local_image_path(product["image_path"]) else None
         self.name_input.setText(product["name"])
         self._set_category_input(product["category_id"])
         self.price_input.setValue(product["price"])
         self.status_input.setCurrentText(product["status"])
         self.description_input.setPlainText(product["description"])
-        self.image_label.setText(product["image"])
+        self._set_image_preview(product["image_path"])
         self.form_status.setText(f"Editing {product['name']}.")
         self._set_controls_enabled()
 
@@ -393,6 +539,7 @@ class Product_Tab(QWidget):
         self.price_input.setValue(0)
         self.status_input.setCurrentText("Visible")
         self.description_input.clear()
+        self._set_image_preview(None)
         self.image_label.setText("No image selected")
         if not self.categories:
             self.form_status.setText("Create a category before adding products.")
@@ -412,7 +559,7 @@ class Product_Tab(QWidget):
         )
         if path:
             self.selected_image_path = path
-            self.image_label.setText(path)
+            self._set_image_preview(path)
 
     def _save_product(self):
         if not self.product_controller:
