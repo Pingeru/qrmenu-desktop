@@ -1,7 +1,11 @@
+import hashlib
+import os
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
@@ -63,6 +67,8 @@ class Product_Tab(QWidget):
         self.selected_product_id = None
         self.selected_image_path = None
         self.image_cache = {}
+        self.image_cache_dir = self._image_cache_dir()
+        self.image_session = self._build_image_session()
         self.backend_dirty = True
 
         outer = QVBoxLayout(self)
@@ -359,6 +365,33 @@ class Product_Tab(QWidget):
         api_client = getattr(product_model, "api_client", None)
         return getattr(api_client, "base_url", API_BASE_URL).rstrip("/")
 
+    def _image_cache_dir(self):
+        root = os.getenv("LOCALAPPDATA")
+        if root:
+            cache_dir = Path(root) / "QRMenuBuilder" / "image-cache"
+        else:
+            cache_dir = Path.home() / ".qr-menu-builder" / "image-cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        return cache_dir
+
+    def _build_image_session(self):
+        session = requests.Session()
+        retry = Retry(
+            total=3,
+            connect=3,
+            read=3,
+            status=2,
+            backoff_factor=0.35,
+            status_forcelist=(429, 500, 502, 503, 504),
+            allowed_methods=frozenset(["GET"]),
+            raise_on_status=False,
+        )
+        adapter = HTTPAdapter(max_retries=retry, pool_connections=8, pool_maxsize=8)
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+        session.headers.update({"User-Agent": "QR Menu Builder Desktop/1.0"})
+        return session
+
     def _image_url_candidates(self, image_path):
         path_text = str(image_path or "").strip()
         if not path_text:
@@ -366,7 +399,12 @@ class Product_Tab(QWidget):
 
         parsed = urlparse(path_text)
         if parsed.scheme in {"http", "https"}:
-            return [path_text]
+            candidates = [path_text]
+            if parsed.scheme == "http":
+                candidates.append(f"https://{path_text[len('http://'):]}")
+            elif parsed.scheme == "https":
+                candidates.append(f"http://{path_text[len('https://'):]}")
+            return list(dict.fromkeys(candidates))
 
         api_base = self._api_base_url()
         api_parts = urlparse(api_base)
@@ -380,6 +418,53 @@ class Product_Tab(QWidget):
             urljoin(f"{api_base}/", normalized),
         ]
         return list(dict.fromkeys(candidates))
+
+    def _remote_cache_path(self, url):
+        parsed = urlparse(url)
+        suffix = Path(parsed.path).suffix.lower()
+        if suffix not in {".jpg", ".jpeg", ".png", ".webp", ".bmp"}:
+            suffix = ".img"
+        digest = hashlib.sha256(url.encode("utf-8")).hexdigest()
+        return self.image_cache_dir / f"{digest}{suffix}"
+
+    def _load_pixmap_from_url(self, url):
+        cached_path = self._remote_cache_path(url)
+        pixmap = QPixmap()
+        if cached_path.is_file() and pixmap.load(str(cached_path)):
+            return pixmap
+        if cached_path.exists():
+            try:
+                cached_path.unlink()
+            except OSError:
+                pass
+
+        try:
+            response = self.image_session.get(url, timeout=(5, 18), stream=True)
+            if response.status_code >= 400:
+                return QPixmap()
+            content_type = response.headers.get("content-type", "")
+            if "image" not in content_type.lower():
+                return QPixmap()
+            chunks = []
+            total_size = 0
+            for chunk in response.iter_content(chunk_size=65536):
+                if not chunk:
+                    continue
+                chunks.append(chunk)
+                total_size += len(chunk)
+                if total_size > 8 * 1024 * 1024:
+                    return QPixmap()
+            data = b"".join(chunks)
+        except requests.RequestException:
+            return QPixmap()
+
+        if len(data) < 512 or not pixmap.loadFromData(data):
+            return QPixmap()
+        try:
+            cached_path.write_bytes(data)
+        except OSError:
+            pass
+        return pixmap
 
     def _is_local_image_path(self, image_path):
         path_text = str(image_path or "").strip()
@@ -404,17 +489,14 @@ class Product_Tab(QWidget):
             pixmap.load(str(local_path))
         else:
             for url in self._image_url_candidates(path_text):
-                try:
-                    response = requests.get(url, timeout=3)
-                except requests.RequestException:
-                    continue
-                if response.status_code >= 400:
-                    continue
-                if pixmap.loadFromData(response.content):
+                pixmap = self._load_pixmap_from_url(url)
+                if not pixmap.isNull():
                     break
 
-        if not pixmap.isNull():
-            pixmap = pixmap.scaled(width, height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        if pixmap.isNull():
+            return QPixmap()
+
+        pixmap = pixmap.scaled(width, height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.image_cache[cache_key] = pixmap
         return pixmap
 
