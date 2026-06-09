@@ -131,6 +131,10 @@ class Main_Window(QMainWindow):
         register_button.setFont(label_font)
         register_button.clicked.connect(self._show_register_page)
 
+        forgot_password_button = make_button("Forgot Password?", "ghost")
+        forgot_password_button.setFont(label_font)
+        forgot_password_button.clicked.connect(self._handle_forgot_password)
+
         form_layout.addWidget(brand_mark, 0, 0, 1, 2, Qt.AlignCenter)
         form_layout.addWidget(title, 1, 0, 1, 2)
         form_layout.addWidget(email_label, 3, 0)
@@ -139,6 +143,7 @@ class Main_Window(QMainWindow):
         form_layout.addWidget(self.password_input, 4, 1)
         form_layout.addWidget(login_button, 5, 0, 1, 2)
         form_layout.addWidget(register_button, 6, 0, 1, 2)
+        form_layout.addWidget(forgot_password_button, 7, 0, 1, 2)
 
         outer_layout.addWidget(card)
         return page
@@ -329,6 +334,25 @@ class Main_Window(QMainWindow):
             return
 
         self._show_home_page()
+
+    def _handle_forgot_password(self):
+        entered_email = self.email_input.text().strip()
+
+        if not entered_email:
+            QMessageBox.warning(self, "Password reset", "Enter your business email first.")
+            self.email_input.setFocus()
+            return
+
+        self.api_client.set_base_url(API_BASE_URL)
+
+        try:
+            response = self.auth_model.forgot_business_password(entered_email)
+        except ApiError as exc:
+            QMessageBox.warning(self, "Password reset failed", str(exc))
+            return
+
+        message = response.get("message") or "If the account exists, a password reset email has been sent."
+        QMessageBox.information(self, "Password reset", message)
 
     def _handle_register(self):
         name = self.register_name_input.text().strip()

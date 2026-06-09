@@ -23,6 +23,7 @@ Currently wired backend features:
 
 - Business register: `POST /business/auth/register`
 - Business login: `POST /business/auth/login`
+- Business forgot password email: `POST /business/auth/forgot-password`
 - Business token refresh: `POST /business/auth/refresh`
 - Business edit: `PUT /business/auth/edit`
 - Business delete: `DELETE /business/auth/delete`
@@ -32,6 +33,7 @@ Currently wired backend features:
 - Business analytics summary and rankings: `/business/analytics`
 - Business QR PNG download: `GET /business/qr/`
 - Public menu landing page encoded by the backend QR: `/menu/<business_id>`
+- Hosted password reset page from the email link: `/password-reset?token=<jwt>`
 
 The backend currently returns all categories from `GET /business/categories`, so the desktop app
 filters category and product screens to the logged-in business before showing editable rows.
@@ -40,7 +42,7 @@ The backend also exposes `/client/auth` routes, but this desktop app is the busi
 and does not currently have client-user auth screens.
 
 The current `pingeru/qrmenu-api` repo exposes business analytics, filtered product listing,
-business QR download, and the public menu landing page.
+business QR download, forgot-password email delivery, and the public menu landing page.
 The desktop app still keeps an order-based analytics fallback in case an older backend deployment
 does not have `/business/analytics` yet.
 

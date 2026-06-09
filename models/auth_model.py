@@ -39,6 +39,13 @@ class AuthModel:
         self._store_auth_response(response)
         return self.business or {}
 
+    def forgot_business_password(self, email: str) -> dict[str, Any]:
+        return self.api_client.post(
+            "/business/auth/forgot-password",
+            {"email": email},
+            auth=False,
+        )
+
     def refresh_access_token(self) -> str:
         response = self.api_client.post(
             "/business/auth/refresh",

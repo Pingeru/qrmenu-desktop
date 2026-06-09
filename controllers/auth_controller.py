@@ -13,6 +13,9 @@ class AuthController:
     def register_business(self, name: str, email: str, password: str):
         return self.auth_model.register_business(name, email, password)
 
+    def forgot_business_password(self, email: str):
+        return self.auth_model.forgot_business_password(email)
+
     def update_business(self, **fields):
         return self.auth_model.update_business(**fields)
 
