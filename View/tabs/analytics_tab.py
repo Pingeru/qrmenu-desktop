@@ -1,11 +1,13 @@
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor, QFont, QPainter, QPen
+from PyQt5.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen
 from PyQt5.QtWidgets import (
     QComboBox,
     QGridLayout,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QMessageBox,
+    QStackedLayout,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -19,7 +21,6 @@ try:
         COLORS,
         SectionHeader,
         StatCard,
-        make_badge,
         make_button,
         make_card,
         make_label,
@@ -31,7 +32,6 @@ except ModuleNotFoundError:
         COLORS,
         SectionHeader,
         StatCard,
-        make_badge,
         make_button,
         make_card,
         make_label,
@@ -40,53 +40,96 @@ except ModuleNotFoundError:
     )
 
 
-class BarChart(QWidget):
-    def __init__(self, values, labels, color="#0f766e"):
+def _format_money(value):
+    try:
+        return f"$ {float(value or 0):,.2f}"
+    except (TypeError, ValueError):
+        return "$ 0.00"
+
+
+class HBarChart(QWidget):
+    """Horizontal bar chart - keeps long category names readable."""
+
+    def __init__(self, color="#0f766e", value_formatter=str):
         super().__init__()
-        self.values = values
-        self.labels = labels
+        self.values = []
+        self.labels = []
         self.color = QColor(color)
+        self.value_formatter = value_formatter
+        self.row_height = 30
+        self.row_gap = 10
+        self.label_width = 150
+        self.value_width = 90
         self.setMinimumHeight(220)
 
     def set_data(self, values, labels):
-        self.values = values
-        self.labels = labels
+        self.values = list(values or [])
+        self.labels = list(labels or [])
+        rows = max(1, len(self.values))
+        self.setMinimumHeight(
+            16 + rows * self.row_height + max(0, rows - 1) * self.row_gap + 16
+        )
         self.update()
 
     def paintEvent(self, event):
         super().paintEvent(event)
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.Antialiasing, True)
 
-        rect = self.rect().adjusted(18, 18, -18, -34)
-        axis_color = QColor("#d8e2df")
-        text_color = QColor("#65736f")
-        max_value = max(self.values) if self.values else 1
-        bar_count = len(self.values)
-        if not bar_count:
+        if not self.values:
+            painter.setPen(QPen(QColor(COLORS["muted"])))
+            painter.drawText(self.rect(), Qt.AlignCenter, "No data")
             painter.end()
             return
 
-        painter.setPen(QPen(axis_color, 1))
-        for index in range(5):
-            y = rect.bottom() - int(rect.height() * index / 4)
-            painter.drawLine(rect.left(), y, rect.right(), y)
+        max_value = max(self.values) if max(self.values) > 0 else 1
+        rect = self.rect().adjusted(14, 14, -14, -14)
 
-        gap = 10
-        bar_width = max(16, int((rect.width() - gap * (bar_count - 1)) / bar_count))
+        text_color = QColor(COLORS["text"])
+        muted = QColor(COLORS["muted"])
+        track = QColor("#eef4f2")
+
+        bar_area_left = rect.left() + self.label_width + 8
+        bar_area_right = rect.right() - self.value_width - 6
+        bar_area_width = max(40, bar_area_right - bar_area_left)
+
+        font = painter.font()
+        metrics = QFontMetrics(font)
+
+        y = rect.top()
         for index, value in enumerate(self.values):
-            left = rect.left() + index * (bar_width + gap)
-            height = int((value / max_value) * (rect.height() - 10)) if max_value else 0
-            top = rect.bottom() - height
-            painter.setPen(Qt.NoPen)
-            painter.setBrush(self.color)
-            painter.drawRoundedRect(left, top, bar_width, height, 4, 4)
+            label = self.labels[index] if index < len(self.labels) else "-"
+            elided = metrics.elidedText(str(label), Qt.ElideRight, self.label_width)
 
-            label = self.labels[index]
-            if len(label) > 10:
-                label = f"{label[:9]}."
-            painter.setPen(QPen(text_color, 1))
-            painter.drawText(left - 8, rect.bottom() + 18, bar_width + 16, 18, Qt.AlignCenter, label)
+            painter.setPen(QPen(text_color))
+            painter.drawText(
+                rect.left(), y, self.label_width, self.row_height,
+                Qt.AlignVCenter | Qt.AlignLeft, elided,
+            )
+
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(track)
+            painter.drawRoundedRect(
+                bar_area_left, y + self.row_height // 2 - 7,
+                bar_area_width, 14, 7, 7,
+            )
+
+            bar_w = int((value / max_value) * bar_area_width) if max_value else 0
+            if bar_w > 0:
+                painter.setBrush(self.color)
+                painter.drawRoundedRect(
+                    bar_area_left, y + self.row_height // 2 - 7,
+                    max(2, bar_w), 14, 7, 7,
+                )
+
+            painter.setPen(QPen(muted))
+            painter.drawText(
+                bar_area_right + 4, y, self.value_width - 4, self.row_height,
+                Qt.AlignVCenter | Qt.AlignRight,
+                self.value_formatter(value),
+            )
+
+            y += self.row_height + self.row_gap
 
         painter.end()
 
@@ -99,127 +142,178 @@ class Analytics_Tab(QWidget):
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
+
         body = QWidget()
         root = QVBoxLayout(body)
         root.setContentsMargins(22, 22, 22, 22)
         root.setSpacing(18)
-        outer.addWidget(make_scroll_area(body), 1)
 
         self.period_filter = QComboBox()
         self.period_filter.addItem("Current month")
         self.period_filter.setEnabled(False)
-        refresh_button = make_button("Refresh")
+        self.period_filter.setMinimumWidth(160)
+        refresh_button = make_button("Refresh", "primary")
         refresh_button.clicked.connect(lambda: self._load_analytics(show_error=True))
         root.addWidget(
             SectionHeader(
                 "Statistics Panel",
-                "",
+                "Performance summary from qrmenu-api business analytics.",
                 [make_label("Period", "muted"), self.period_filter, refresh_button],
             )
         )
 
+        # KPI cards
         summary = QHBoxLayout()
         summary.setSpacing(12)
         self.revenue_card = StatCard("Revenue", "$ 0.00", "Selected period", "green")
         self.order_card = StatCard("Orders", "0", "Total orders", "blue")
         self.average_card = StatCard("Average order", "$ 0.00", "Revenue per order", "accent")
-        self.top_card = StatCard("Top product", "-", "By quantity", "amber")
+        self.top_card = StatCard("Top product", "-", "By quantity sold", "amber")
         summary.addWidget(self.revenue_card)
         summary.addWidget(self.order_card)
         summary.addWidget(self.average_card)
         summary.addWidget(self.top_card)
         root.addLayout(summary)
 
-        dashboard_widget = QWidget()
-        dashboard_widget.setMinimumHeight(560)
-        dashboard = QGridLayout(dashboard_widget)
-        dashboard.setSpacing(16)
-        dashboard.addWidget(self._build_revenue_chart(), 0, 0)
-        dashboard.addWidget(self._build_quantity_chart(), 0, 1)
-        dashboard.addWidget(self._build_product_table(), 1, 0)
-        dashboard.addWidget(self._build_insight_panel(), 1, 1)
-        dashboard.setRowStretch(0, 1)
-        dashboard.setRowStretch(1, 1)
-        dashboard.setColumnStretch(0, 3)
-        dashboard.setColumnStretch(1, 2)
-        root.addWidget(make_scroll_area(dashboard_widget), 1)
+        # Main content with empty-state overlay
+        self.content_stack = QStackedLayout()
+        self.content_stack.setContentsMargins(0, 0, 0, 0)
+        stack_holder = QWidget()
+        stack_holder.setLayout(self.content_stack)
+
+        self.dashboard_widget = self._build_dashboard()
+        self.empty_state_widget = self._build_empty_state()
+        self.content_stack.addWidget(self.dashboard_widget)
+        self.content_stack.addWidget(self.empty_state_widget)
+        root.addWidget(stack_holder, 1)
+
+        outer.addWidget(make_scroll_area(body), 1)
 
         self._load_analytics(show_error=False)
+
+    # ---------- Builders ----------
+
+    def _build_dashboard(self):
+        wrapper = QWidget()
+        grid = QGridLayout(wrapper)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setSpacing(16)
+        grid.addWidget(self._build_revenue_chart(), 0, 0)
+        grid.addWidget(self._build_quantity_chart(), 0, 1)
+        grid.addWidget(self._build_product_table(), 1, 0)
+        grid.addWidget(self._build_insight_panel(), 1, 1)
+        grid.setColumnStretch(0, 3)
+        grid.setColumnStretch(1, 2)
+        grid.setRowMinimumHeight(0, 280)
+        grid.setRowMinimumHeight(1, 280)
+        return wrapper
 
     def _build_revenue_chart(self):
         card = make_card()
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(10)
-
-        toolbar = QHBoxLayout()
-        toolbar.addWidget(make_label("Category Revenue", "section-title"))
-        toolbar.addStretch(1)
-        toolbar.addWidget(make_badge("Analytics API", "accent"))
-        layout.addLayout(toolbar)
-
-        self.revenue_chart = BarChart([], [], COLORS["blue"])
+        layout.addWidget(make_label("Category Revenue", "section-title"))
+        layout.addWidget(
+            make_label("Revenue per category for the selected period.", "muted")
+        )
+        self.revenue_chart = HBarChart(COLORS["accent"], _format_money)
         layout.addWidget(self.revenue_chart, 1)
         return card
 
     def _build_quantity_chart(self):
         card = make_card()
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(10)
-
-        toolbar = QHBoxLayout()
-        toolbar.addWidget(make_label("Category Items", "section-title"))
-        toolbar.addStretch(1)
-        toolbar.addWidget(make_badge("Analytics API", "accent"))
-        layout.addLayout(toolbar)
-
-        self.quantity_chart = BarChart([], [], COLORS["accent"])
+        layout.addWidget(make_label("Category Items", "section-title"))
+        layout.addWidget(
+            make_label("Items sold per category for the selected period.", "muted")
+        )
+        self.quantity_chart = HBarChart(COLORS["blue"], lambda v: str(int(v)))
         layout.addWidget(self.quantity_chart, 1)
         return card
 
     def _build_product_table(self):
         card = make_card()
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(14, 14, 14, 14)
-        layout.setSpacing(12)
-
-        toolbar = QHBoxLayout()
-        toolbar.addWidget(make_label("Product Analytics", "section-title"))
-        toolbar.addStretch(1)
-        toolbar.addWidget(make_badge("Top products", "accent"))
-        layout.addLayout(toolbar)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(10)
+        layout.addWidget(make_label("Product Analytics", "section-title"))
+        layout.addWidget(
+            make_label("Top products by quantity sold.", "muted")
+        )
 
         self.product_table = QTableWidget(0, 4)
         self.product_table.setHorizontalHeaderLabels(["Product", "Items", "Revenue", "Share"])
         set_table_defaults(self.product_table)
+        header = self.product_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         layout.addWidget(self.product_table, 1)
         return card
 
     def _build_insight_panel(self):
         card = make_card()
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(14)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(10)
 
         layout.addWidget(make_label("Insights", "section-title"))
+
         self.insight_title = QLabel("-")
         title_font = QFont()
-        title_font.setPointSize(18)
+        title_font.setPointSize(16)
         title_font.setBold(True)
         self.insight_title.setFont(title_font)
         self.insight_title.setStyleSheet(f"color: {COLORS['accent']};")
+        self.insight_title.setWordWrap(True)
         layout.addWidget(self.insight_title)
 
         self.insight_body = make_label("", "subtitle")
         self.insight_body.setWordWrap(True)
         layout.addWidget(self.insight_body)
 
+        layout.addStretch(1)
+
         self.sync_status = make_label("", "muted")
         self.sync_status.setWordWrap(True)
-        layout.addStretch(1)
         layout.addWidget(self.sync_status)
         return card
+
+    def _build_empty_state(self):
+        card = make_card()
+        v = QVBoxLayout(card)
+        v.setContentsMargins(20, 60, 20, 60)
+        v.addStretch(1)
+
+        title = make_label("No analytics data for this period yet.")
+        title_font = QFont()
+        title_font.setPointSize(16)
+        title_font.setBold(True)
+        title.setFont(title_font)
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet(f"color: {COLORS['text']};")
+        v.addWidget(title)
+
+        subtitle = make_label(
+            "Analytics will appear once your menu starts receiving customer orders.",
+            "muted",
+        )
+        subtitle.setAlignment(Qt.AlignCenter)
+        subtitle.setWordWrap(True)
+        v.addWidget(subtitle)
+
+        self.empty_reason = make_label("", "muted")
+        self.empty_reason.setAlignment(Qt.AlignCenter)
+        self.empty_reason.setWordWrap(True)
+        v.addWidget(self.empty_reason)
+        v.addStretch(1)
+        return card
+
+    # ---------- Data ----------
 
     def _load_analytics(self, show_error=False):
         if not self.analytics_controller:
@@ -234,7 +328,7 @@ class Analytics_Tab(QWidget):
             self._load_order_fallback(show_error=False, reason=str(exc))
             return
 
-        self._refresh_from_payload(payload)
+        self._refresh_from_payload(payload or {})
 
     def _load_order_fallback(self, show_error=False, reason="Analytics endpoint is not connected."):
         if not self.order_controller:
@@ -249,16 +343,17 @@ class Analytics_Tab(QWidget):
                 QMessageBox.warning(self, "Analytics fallback failed", str(exc))
             return
 
+        orders = orders or []
         total_revenue = sum(self._to_float(order.get("total_amount")) for order in orders)
         total_orders = len(orders)
         payload = {
             "total_orders": total_orders,
             "total_revenue": total_revenue,
-            "average_order_value": total_revenue / total_orders if total_orders else 0,
+            "average_order_value": (total_revenue / total_orders) if total_orders else 0,
             "total_items": sum(
                 int(item.get("quantity") or 0)
                 for order in orders
-                for item in order.get("items", [])
+                for item in (order.get("items") or [])
             ),
             "top_products": self._product_entries_from_orders(orders),
             "least_sold_products": [],
@@ -279,19 +374,31 @@ class Analytics_Tab(QWidget):
         total_items = int(payload.get("total_items") or 0)
         top_product_name = self._product_name(top_products[0]) if top_products else "-"
 
-        self.revenue_card.value_label.setText(f"$ {total_revenue:,.2f}")
+        self.revenue_card.value_label.setText(_format_money(total_revenue))
         self.order_card.value_label.setText(str(total_orders))
-        self.average_card.value_label.setText(f"$ {average_order:,.2f}")
+        self.average_card.value_label.setText(_format_money(average_order))
         self.top_card.value_label.setText(top_product_name)
 
+        # If backend returns nothing meaningful, show empty state instead of empty charts.
+        if total_orders == 0 and not top_products and not top_categories:
+            self._show_empty_state(
+                fallback_reason
+                or "No analytics data for this period yet."
+            )
+            return
+
+        self.content_stack.setCurrentWidget(self.dashboard_widget)
+
         chart_source = top_categories or self._categories_from_products(top_products)
+        chart_source = chart_source[:8]
+
         self.revenue_chart.set_data(
-            [self._entry_revenue(item) for item in chart_source[:8]],
-            [self._entry_name(item) for item in chart_source[:8]],
+            [self._entry_revenue(item) for item in chart_source],
+            [self._entry_name(item) for item in chart_source],
         )
         self.quantity_chart.set_data(
-            [self._entry_quantity(item) for item in chart_source[:8]],
-            [self._entry_name(item) for item in chart_source[:8]],
+            [self._entry_quantity(item) for item in chart_source],
+            [self._entry_name(item) for item in chart_source],
         )
         self._refresh_product_table(top_products)
         self._refresh_insights(
@@ -310,12 +417,8 @@ class Analytics_Tab(QWidget):
         self.order_card.value_label.setText("0")
         self.average_card.value_label.setText("$ 0.00")
         self.top_card.value_label.setText("-")
-        self.revenue_chart.set_data([], [])
-        self.quantity_chart.set_data([], [])
-        self._refresh_product_table([])
-        self.insight_title.setText("No analytics")
-        self.insight_body.setText(message)
-        self.sync_status.setText(message)
+        self.empty_reason.setText(message or "")
+        self.content_stack.setCurrentWidget(self.empty_state_widget)
 
     def _refresh_product_table(self, products):
         total_items = sum(self._entry_quantity(product) for product in products)
@@ -325,10 +428,19 @@ class Analytics_Tab(QWidget):
             self.product_table.insertRow(row)
             quantity = self._entry_quantity(product)
             share = (quantity / total_items) * 100 if total_items else 0
-            self.product_table.setItem(row, 0, QTableWidgetItem(self._product_name(product)))
-            self.product_table.setItem(row, 1, QTableWidgetItem(str(quantity)))
-            self.product_table.setItem(row, 2, QTableWidgetItem(f"$ {self._entry_revenue(product):,.2f}"))
-            self.product_table.setItem(row, 3, QTableWidgetItem(f"{share:.1f}%"))
+
+            name_item = QTableWidgetItem(self._product_name(product))
+            qty_item = QTableWidgetItem(str(quantity))
+            qty_item.setTextAlignment(Qt.AlignCenter)
+            rev_item = QTableWidgetItem(_format_money(self._entry_revenue(product)))
+            rev_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            share_item = QTableWidgetItem(f"{share:.1f} %")
+            share_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+            self.product_table.setItem(row, 0, name_item)
+            self.product_table.setItem(row, 1, qty_item)
+            self.product_table.setItem(row, 2, rev_item)
+            self.product_table.setItem(row, 3, share_item)
 
     def _refresh_insights(
         self,
@@ -342,37 +454,54 @@ class Analytics_Tab(QWidget):
         least_sold_category,
         fallback_reason,
     ):
-        if total_orders == 0:
-            self.insight_title.setText("No orders yet")
-            self.insight_body.setText("Analytics endpoint returned no orders for the selected period.")
+        top_product = self._product_name(top_products[0]) if top_products else None
+        if top_product:
+            self.insight_title.setText(f"{top_product} leads the period")
         else:
-            top_product = self._product_name(top_products[0]) if top_products else "No product detail"
-            top_category = self._entry_name(top_categories[0]) if top_categories else "-"
-            least_product = self._product_name(least_sold_products[0]) if least_sold_products else "-"
-            least_category = self._entry_name(least_sold_category) if least_sold_category else "-"
-            self.insight_title.setText(f"{top_product} leads")
-            self.insight_body.setText(
-                f"{total_orders} orders produced $ {total_revenue:,.2f} and {total_items} sold items. "
-                f"Top category: {top_category}. Least sold product: {least_product}. "
-                f"Least sold category: {least_category}."
+            self.insight_title.setText("Period summary")
+
+        lines = [
+            f"{total_orders} orders generated {_format_money(total_revenue)} "
+            f"across {total_items} items sold."
+        ]
+        if top_categories:
+            lines.append(f"Top category: {self._entry_name(top_categories[0])}.")
+        if least_sold_products:
+            lines.append(
+                f"Least sold product: {self._product_name(least_sold_products[0])}."
             )
+        if least_sold_category:
+            lines.append(
+                f"Least sold category: {self._entry_name(least_sold_category)}."
+            )
+        self.insight_body.setText("\n".join(lines))
 
         if fallback_reason:
-            self.sync_status.setText(f"Using order fallback because analytics failed: {fallback_reason}")
+            self.sync_status.setText(
+                f"Showing order-derived metrics (analytics endpoint: {fallback_reason})."
+            )
         else:
-            self.sync_status.setText("")
+            self.sync_status.setText("Data source: /business/analytics")
+
+    # ---------- Helpers ----------
 
     def _product_entries_from_orders(self, orders):
         products = {}
         for order in orders:
-            for item in order.get("items", []):
+            for item in (order.get("items") or []):
                 product_id = str(item.get("product_id") or "unknown")
                 product_name = (item.get("product_name") or "").strip()
                 if not product_name:
-                    product_name = f"Product {product_id[-6:]}" if product_id != "unknown" else "Unknown product"
+                    product_name = (
+                        f"Product {product_id[-6:]}"
+                        if product_id != "unknown"
+                        else "Unknown product"
+                    )
                 quantity = int(item.get("quantity") or 0)
                 revenue = self._to_float(item.get("price_at_purchase")) * quantity
-                current = products.setdefault(product_name, {"sold_quantity": 0, "sold_revenue": 0.0})
+                current = products.setdefault(
+                    product_name, {"sold_quantity": 0, "sold_revenue": 0.0}
+                )
                 current["sold_quantity"] += quantity
                 current["sold_revenue"] += revenue
         return [
